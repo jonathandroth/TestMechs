@@ -58,6 +58,7 @@ test_sharp_null <- function(df,
                                d = d,
                                m = m,
                                y = y)
+
   
   ## Evaluate whether M is binary
   binary_M <- dplyr::n_distinct(df[m]) == 2
@@ -75,6 +76,12 @@ test_sharp_null <- function(df,
   ## Do not run the binary test when frac_ATs_affected is not null, since we want to test for the fraction of always-takers
   if (!is.null(frac_ATs_affected) | !(max_defiers_share == 0)) {
     use_binary = FALSE
+  }
+
+  ## Make sure lpinfer is installed if method == "FSST"
+  if (method == "FSST" & !require(lpinfer)) {
+    stop("You must install pacakge lpinfer to use the FSST method. You can install it by running
+devtools::install_github('conroylau/lpinfer')")
   }
   
   ## Print confirmation, can delete this if you prefer
