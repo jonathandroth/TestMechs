@@ -497,7 +497,7 @@ breakdown_defier_share <- function(df,
   lb_fn <- function(max_defiers_share){
     min_tv <-
     base::suppressWarnings(
-    compute_tv_ats_multiple_m(df = df,
+    lb_frac_affected(df = df,
                               d = d,
                               m = m,
                               y = y ,
@@ -507,14 +507,14 @@ breakdown_defier_share <- function(df,
                               num_Ybins = num_Ybins,
                               max_defiers_share = max_defiers_share))
 
-    #If the lb on ATs is zero, compute_tv_ats_multiple_m returns zero
+    #If the lb on ATs is zero, lb_frac_affected returns zero
     #For our purposes, we treat this as a zero
     if(is.nan(min_tv)){min_tv <- 0}
     return(min_tv)
   }
 
   # Compute the min defier share compatible with the data
-  min_compatible_defiers <-     compute_tv_ats_multiple_m(df = df,
+  min_compatible_defiers <-     lb_frac_affected(df = df,
                                                           d = d,
                                                           m = m,
                                                           y = y ,
