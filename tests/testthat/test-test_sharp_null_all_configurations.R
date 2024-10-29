@@ -78,7 +78,7 @@ test_that("If test_sharp_null runs under reasonable configurations of the parame
                                      rearrange = params$Rearrange,
                                      fix_n1 = FALSE,
                                      use_nc = params$Use_nc,
-                                     # defiers_share = params$Defiers_share, # problem to be fixed
+                                     # max_defiers_share = params$Defiers_share, # problem to be fixed
                                      weight.matrix = params$Weight.matrix,
                                      lambda = params$Lambda)
         
@@ -96,7 +96,7 @@ test_that("If test_sharp_null runs under reasonable configurations of the parame
                                      rearrange = params$Rearrange,
                                      fix_n1 = TRUE,
                                      use_nc = params$Use_nc,
-                                     # defiers_share = params$Defiers_share, # problem to be fixed
+                                     # max_defiers_share = params$Defiers_share, # problem to be fixed
                                      weight.matrix = params$Weight.matrix,
                                      lambda = params$Lambda)
         
@@ -118,7 +118,7 @@ test_that("If test_sharp_null runs under reasonable configurations of the parame
                                      rearrange = params$Rearrange,
                                      fix_n1 = FALSE,
                                      use_nc = params$Use_nc,
-                                     defiers_share = params$Defiers_share,
+                                     max_defiers_share = params$Defiers_share,
                                      analytic_variance = params$Analytic_variance)
         
         testthat::expect_no_error(test_sharp_null_result)
@@ -135,7 +135,7 @@ test_that("If test_sharp_null runs under reasonable configurations of the parame
                                      rearrange = params$Rearrange,
                                      fix_n1 = TRUE,
                                      use_nc = params$Use_nc,
-                                     defiers_share = params$Defiers_share,
+                                     max_defiers_share = params$Defiers_share,
                                      analytic_variance = params$Analytic_variance)
         
         testthat::expect_no_error(test_sharp_null_result)

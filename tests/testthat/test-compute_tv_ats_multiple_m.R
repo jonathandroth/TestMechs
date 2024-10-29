@@ -1,8 +1,8 @@
-#Write unit tests for the compute_tv_ats_multiple_m function
+#Write unit tests for the lb_frac_affected function
 
-#compute_tv_ats_multiple_m should match the output of compute_tv_ats when a single binary M is provided
+#lb_frac_affected should match the output of compute_tv_ats when a single binary M is provided
 
-test_that("compute_tv_ats_multiple_m matches compute_tv_ats when a binary M is provided", {
+test_that("lb_frac_affected matches compute_tv_ats when a binary M is provided", {
   #Use the fn for the binary M case
   tv_binary <-
   MedBounds::compute_tv_ats(df = MedBounds::kerwin_data,
@@ -11,7 +11,7 @@ test_that("compute_tv_ats_multiple_m matches compute_tv_ats when a binary M is p
                               y = "EL_EGRA_PCA_Index")
 
   tv_multiple <-
-    MedBounds::compute_tv_ats_multiple_m(df = MedBounds::kerwin_data,
+    MedBounds::lb_frac_affected(df = MedBounds::kerwin_data,
                               d= "treated",
                               m = "primarily_leblango",
                               y = "EL_EGRA_PCA_Index",
@@ -22,8 +22,8 @@ test_that("compute_tv_ats_multiple_m matches compute_tv_ats when a binary M is p
 })
 
 
-#compute_tv_ats_multiple_m should agree with the analytic formulas when M is an ordered scalar
-test_that("compute_tv_ats_multiple_m should agree with the analytic formulas when M is an ordered scalar",{
+#lb_frac_affected should agree with the analytic formulas when M is an ordered scalar
+test_that("lb_frac_affected should agree with the analytic formulas when M is an ordered scalar",{
   #Create an M with three values
   df <- MedBounds::kerwin_data
   df$m <- dplyr::ntile(df$primarily_leblango,3)
@@ -45,7 +45,7 @@ test_that("compute_tv_ats_multiple_m should agree with the analytic formulas whe
   analytical_tv2 <- (max_p_diff - (p_mgte2_1-p_mgte2_0))/ theta_kk
 
   tv_multiple <-
-    MedBounds::compute_tv_ats_multiple_m(df = df,
+    MedBounds::lb_frac_affected(df = df,
                                          d= "treated",
                                          m = "m",
                                          y = "EL_EGRA_PCA_Index",
@@ -101,7 +101,7 @@ test_that("Fractional linear programming works on simple examples", {
 })
 
 test_that("get error when monotonicity is violated",{
-  expect_error(compute_tv_ats_multiple_m(
+  expect_error(lb_frac_affected(
     kerwin_data %>% dplyr::mutate(minus_treated = 1-treated),
     d = "minus_treated",
     m = "primarily_leblango",

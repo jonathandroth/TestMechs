@@ -70,6 +70,9 @@ test_sharp_null <- function(df,
   else if (is.null(use_binary)) {
     use_binary = binary_M
   }
+
+  ## Set frac_ATs_affected to NULL for now, will allow for other values later on
+  frac_ATs_affected <- NULL
   
   ## Do not run the binary test when frac_ATs_affected is not null, since we want to test for the fraction of always-takers
   if (!is.null(frac_ATs_affected) | !(max_defiers_share == 0)) {
