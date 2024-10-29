@@ -23,10 +23,9 @@ Mechanisms"](https://www.jonathandroth.com/assets/files/TestingMechanisms_Draft.
 by Soonwoo Kwon and Jonathan Roth. The package provides tests for the "sharp
 null of full mediation", which conjectures that the effect of a treatment
 operates through a particular conjectured mechanism (or set of mechanisms)
-M. The treatment is assumed to be randomly assigned. It
-also provides lower bounds on the fraction of "always-takers" who are affected
+M. It also provides lower bounds on the fraction of "always-takers" who are affected
 by the treatment despite having the same value of M regardless of treatment
-status.
+status. For now, the package assumes that the treatment is as good as randomly assigned (as in an RCT); we hope to add support for conditional random assignment in future iterations of the package. Note that the approach in the paper requires the mediator $M$ to be discrete. 
 
 ## Installation
 
@@ -83,7 +82,7 @@ partial densities to visually detect potential violations of the *sharp null*,
 2) `test_sharp_null()` to conduct a statistical test for the *sharp null* and 3)
 `lb_frac_affected()` to compute the sharp lower bound for the fraction of
 always-takers (or never-takers) that are affected by treatment. While this
-example covers the basic usage of these function, please refer to the
+example covers the basic usage of these functions, please refer to the
 documentation of each function (e.g., `?test_sharp_null`) for a more detailed
 description. 
 
@@ -92,7 +91,7 @@ description.
 We first provide graphical evidence using a partial density plot using the
 function `partial_density_plot()`. When $M$ is binary, such (partial) density
 plots are often helpful to understand where the violations of the *sharp null*
-is coming from. The following snippet reproduces Figure 3 of the main paper.
+are coming from. The following snippet reproduces Figure 3 of the main paper.
 
 ```{r}
 nt_plot <-
@@ -125,51 +124,71 @@ nt_plot +
 ```
 
 This figure shows estimates of $P(Y=y,M=0 \mid D=d)$ for both $d=1$ and
-$d=0$. Under monotonicity, then as shown in Section 2 of the paper, we should
+$d=0$. Under monotonicity, as shown in Section 2 of the paper, we should
 have that $P(Y=y, M=0 \mid D=1) \leq P(Y=y, M=0 \mid D=0)$ for all values of
-$y$. As shown in the figure, however, this inequality appears to be violated at
+$y$. In other words, there should be a *negative* treatment effect on the compound outcome $1[Y=y,M=0]$ (e.g. have outcome 5 and no grandmother present). As shown in the figure, however, this inequality appears to be violated at
 large values of $y$, suggesting that the outcome for some treated never-takers
-improved when receiving the treatment.
+improved when receiving the treatment. 
 
-### Testing the *sharp null of full mediation*
+The argument `plot_nts = T` tells the package to make a plot showing the inequalities corresponding to there being no treatment effect for the "never-takers" (i.e. individuals with $M=0$ under both treatments). If instead `plot_nts` is set to `F`, we get a similar plot for the always-takers, which checks whether $P(Y=y, M=1 \mid D=1) \geq P(Y=y, M=1 \mid D=0)$. In this example, these inequalities appear to be satisfied, and so we cannot reject that there is no effect of the treatment on the always-takers.   
 
-While the figure above hints a possible violation of the *sharp null*, it does
+```{r}
+at_plot <-
+  partial_density_plot(df = mother_data,
+                       d = "treat",
+                       m = "grandmother",
+                       y = "motherfinancial",
+                       num_Ybins = 5,
+                       plot_nts = F,
+                       density_1_label = "Prob. In Treated Group (P(Y,M=0|D=1))",
+                       density_0_label = "Prob. In Control Group (P(Y,M=0|D=0))") +
+  ylab("Probability") +
+  xlab("Event: Grandmother Present (M=1) and Y in Stated Range")
+
+at_plot  +
+  theme(legend.position="bottom",
+        legend.title = element_blank())
+```
+
+### Testing the sharp null of full mediation
+
+While the figure above hints at a possible violation of the *sharp null*, it does
 not come with any uncertainty quantification. The function `test_sharp_null()`
 conducts statistical inference of the *sharp null* using the method described in
-Section 4 of the paper. The following snippet runs this test based on Cox and
-Shi (2023) (as can be seen from `method = "CS"`).
+Section 4 of the paper. The following snippet runs this test based on the test proposed in Cox and
+Shi (2023), which is our recommended approach for most applications. The package supports using the tests provided by Andrews, Roth, and Pakes (2023) and Fang, Santos, Shaikh, and Torgovitsky (2023); these methods can be specified by changing the `method` argument from `"CS"` to `"ARP"` or `"FSST"`.
 
 ```{r, cache = TRUE}
 test_result <- test_sharp_null(df = mother_data,
                                d = "treat",
                                m = "grandmother",
                                y = "motherfinancial",
-                               method = "CS",
-                               num_Ybins = 5,
-                               cluster = "uc")
+                               method = "CS", #use Cox and Shi test
+                               num_Ybins = 5, #discretize using 5 bins
+                               cluster = "uc") #cluster SEs at uc level
 
 test_result$pval
 ```
 
 The test gives a p-value of `r round(test_result$pval, digits = 3)`, and thus
-the *sharp null* is rejected at a 5% significance level. Here, the p-value
+the *sharp null* is rejected at the 5% significance level. Here, the p-value
 corresponds to the smallest value of $\alpha$ for which the test rejects. As
 mentioned above, we discretize the outcome variable to 5 bins as can be seen
 from the argument `num_Ybins = 5`. Currently, the function discretizes $Y$ into
 5 bins if a `num_Ybins` value is not provided but $Y$ takes more than $30$
-distinct values in the data.
+distinct values in the data. Because all of the methods rely on a central limit theorem approximation, one should choose the number of bins small enough such that the central limit theorem is reasonable within cells defined by the combination of $(Y,M,D)$. 
 
 
 ### Calculating the lower bound on fraction of always-takers affected by outcome
 
-We now compute lower bounds on the fraction of always-takers whose outcome is
+The test above suggests that the treatment effect does not operate entirely through the presence of a grandmother in the home. There are some people (never-takers) whose outcome is affected by the treatment despite having no change in $M$. It must be that some other mechanism mattered for these people. But how prevelant are these alternative mechanisms?To give a sense, we now compute lower bounds on the fraction of never-takers whose outcome is
 affected by the treatment despite having the same value of $M$ under both
 treatments. This gives a sense of the strength of mechanisms other than $M$:
-they tell us what fraction of the $k$-always takers have a direct effect of the
+it tells us what fraction of the never-takers have a direct effect of the
 treatment. The definition of the lower bounds can be found in Section 3.1 of the
 paper. The function `lb_frac_affected` computes (a point estimate of) this lower
-bound. The argument `at_group = 0` corresponds to computing this lower bound for
-$0$-always takers, or, the never-takers. 
+bound. The argument `at_group = 0` corresponds to computing this lower bound for the never-takers, who are referred to as "0-always takers" in the more general notation in the paper.
+
 ```{r, cache = TRUE}
 lb_nts <- lb_frac_affected(df = mother_data,
                            d = "treat",
@@ -180,7 +199,7 @@ lb_nts <- lb_frac_affected(df = mother_data,
 lb_nts
 ```
 Our estimates of the lower bound imply that at least `r round(100 * lb_nts)`
-percent of never-takers are affected by the treatment.
+percent of never-takers are affected by the treatment. One could likewise test the fraction of never-takers affected by setting `at_group = 1` (in this case, the lower bound is zero). If `at_group` is set to `NULL`, then the package calculates the fraction pooling across all types that have the same value of $M$ under both treatments (i.e. always-takers and never-takers when $M$ is binary.)
 
 ### Allowing for defiers
 
@@ -207,7 +226,7 @@ test_result_defiers$pval
 ```
 The p-value increases to `r round(test_result_defiers$pval, 3)`, so the test
 rejects the *sharp null* even if you allow one percent of the population to be
-defiers. 
+defiers. (Allowing for larger shares of defiers will eventually lead to an insignificant result.)
 
 Likewise, we can also calculate the lower bound on the fraction of never-takers
 under this relaxed monotonicity.
@@ -245,7 +264,7 @@ test_sharp_null(df = mother_data,
 Again, we reject the *sharp null* that all the treatment effect goes through the
 relationship quality with the husband.
 
-We also estimate a lower bound on the fraction of always-takers:
+We can also estimate a lower bound on the fraction of always-takers:
 ```{r, warning = FALSE}
 lb_frac_affected(df = mother_data,
                  d = "treat",
@@ -257,14 +276,12 @@ lb_frac_affected(df = mother_data,
 ```
 Here, the parameter `at_group = NULL` makes the function to compute the lower bound
 on the fraction of always-takers, pooled across
-different $M$ values to be around 10 percent. The parameter `allow_min_defiers = TRUE`
-is used to allow a minimal number of defiers for monotonicity to be consistent
-with the data -- see footnote 25 of the paper for details.
+different $M$ values to be around 10 percent. (The empirical distribution suggests a small violation of monotonicity, although it is not statistically significant; the argument `allow_min_defiers = TRUE` calculates the lower bound allowing for the minimum number of defiers consistent with the empirical distribution --- see footnote 25 of the paper for details.)
 
 ### Combination of both mechanisms
 
 Finally, we test the null hypothesis that the treatment effect is explained by
-the combination of the two mechanisms.
+the combination of the two mechanisms. This is done by passing a vector of variables names for the `m` argument. 
 ```{r, cache = TRUE}
 test_result_both <- test_sharp_null(df = mother_data,
                                     d = "treat",
