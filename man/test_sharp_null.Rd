@@ -26,8 +26,7 @@ test_sharp_null(
   analytic_variance = ifelse(method == "FSST", FALSE, TRUE),
   max_defiers_share = 0,
   new_dof_CS = FALSE,
-  use_binary = NULL,
-  frac_ATs_affected = NULL
+  use_binary = NULL
 )
 }
 \arguments{
@@ -75,8 +74,6 @@ support}
 \item{new_dof_CS}{Use the new degrees of freedom formula for Cox and Shi? Default is FALSE.}
 
 \item{use_binary}{If TRUE, uses ARP and CS implementation that exploits the fact that there are no nuisance parameters when the mediator is binary}
-
-\item{frac_ATs_affected}{Default is NULL. If specified as a float in (0,1), this function tests for the fraction of always-takers affected}
 }
 \description{
 This function tests the sharp null that Y(1,m) = Y(0,m). The
