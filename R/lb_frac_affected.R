@@ -548,9 +548,3 @@ breakdown_defier_share <- function(df,
   }
   return(ub)
 }
-
-##' @title Wrapper for lb_frac_affected for legacy issues
-##' @export
-compute_tv_ats_multiple_m <- function(...) {
-  lb_frac_affected(...)
-}
