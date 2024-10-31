@@ -1,7 +1,7 @@
 # test_that("Lee bounds and ours coincide if don't do correction for point mass", {
 #   library(leebounds)
 #   leeresults <-
-#     leebounds::leebounds(MedBounds::kerwin_data %>%
+#     leebounds::leebounds(TestMechs::kerwin_data %>%
 #                 dplyr::rename(outcome = EL_EGRA_PCA_Index,
 #                        selection = primarily_leblango,
 #                        treat = treated))

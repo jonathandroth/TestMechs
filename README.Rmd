@@ -13,7 +13,7 @@ knitr::opts_chunk$set(
 )
 ```
 
-# MedBounds
+# TestMechs
 
 <!-- badges: start -->
 <!-- badges: end -->
@@ -29,14 +29,14 @@ status. For now, the package assumes that the treatment is as good as randomly a
 
 ## Installation
 
-You can install the development version of MedBounds from [GitHub](https://github.com/) with:
+You can install the development version of TestMechs from [GitHub](https://github.com/) with:
 
 ```{r, eval = FALSE}
 # Install devtools if not already installed
 install.packages("devtools")
 
 # Install package
-devtools::install_github("jonathandroth/MedBounds")
+devtools::install_github("jonathandroth/TestMechs")
 ```
 
 ## Application to Baranov et al. (2020)
@@ -54,8 +54,8 @@ of these two mechanisms.
 
 We start with loading the required packages and the data.
 ```{r, message = F, warning=F}
-# Load MedBounds
-library(MedBounds)
+# Load TestMechs
+library(TestMechs)
 
 # Load other packages that are required to run the example
 library(dplyr)
@@ -203,7 +203,7 @@ percent of never-takers are affected by the treatment. One could likewise test t
 
 ### Allowing for defiers
 
-By default, MedBounds imposes the monotonicity assumption that the treatment can
+By default, TestMechs imposes the monotonicity assumption that the treatment can
 only increase the value of $M$. In this setting, this means that everyone who
 would have a grandmother present without receiving CBT treatment would also have
 one present when receiving CBT treatment. We can relax this assumption by

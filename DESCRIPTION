@@ -1,8 +1,8 @@
-Package: MedBounds
+Package: TestMechs
 Type: Package
 Title: Bounds on direct effects for always-takers/never-takers
 Version: 0.1.0
-Author: Jonathan Roth
+Author: Soonwoo Kwon, Jonathan Roth
 Maintainer: Jonathan Roth <jonathan_roth@brown.edu>
 Description: Mediation analysis with binary treatment D and mediator M. Computes various measures related to direct effect of D on Y for those with constant M (always-takers or never-takers)
 License: GPL (>= 3)

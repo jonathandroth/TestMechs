@@ -36,7 +36,7 @@ test_that("TV returns number close to 1 for very different distributions using b
 })
 
 test_that("TV bound close to 1 w/very large treatment effect", {
-  expect_equal(compute_tv_ats(df = MedBounds::kerwin_data %>%
+  expect_equal(compute_tv_ats(df = TestMechs::kerwin_data %>%
                                 dplyr::mutate(EL_EGRA_PCA_Index =
                                                 ifelse(treated,EL_EGRA_PCA_Index + 20,EL_EGRA_PCA_Index)),
                               d= "treated",

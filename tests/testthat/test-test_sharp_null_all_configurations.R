@@ -5,19 +5,19 @@
 ## # devtools::install_github("soonwookwon/lpinfer")
 ## # devtools::install_github("asheshrambachan/HonestDiD")
 ## # devtools::install_github("haluong89-bcn/leebounds")
-## # devtools::install_github("jonathandroth/MedBounds")
+## # devtools::install_github("jonathandroth/TestMechs")
 ## library(testthat)
 ## library(parallel)
 ## library(foreach)
 ## library(doParallel)
 ## library(dplyr)
-## library(MedBounds)
+## library(TestMechs)
 
 
 ## test_that("If test_sharp_null runs under reasonable configurations of the parameters 
 ##           using our application (for each possible type of test).", {
             
-##   testdf = MedBounds::kerwin_data;
+##   testdf = TestMechs::kerwin_data;
   
 ##   methods = c("ARP", "CS", "FSST");
 ##   cluster = c("Age"); # avoid binary cluster variable for testing
@@ -68,7 +68,7 @@
 ##       if (params$Fix_n1 == FALSE){
         
 ##         test_sharp_null_result <-
-##           MedBounds::test_sharp_null(df = testdf,
+##           TestMechs::test_sharp_null(df = testdf,
 ##                                      d = "treated",
 ##                                      m = "primarily_leblango",
 ##                                      y = "EL_EGRA_PCA_Index",
@@ -87,7 +87,7 @@
 ##       }else{ # if Fix_n1 == TRUE, no cluster argument, unless the cluster variable is consistent with treatment (either all or none treated)
         
 ##         test_sharp_null_result <-
-##           MedBounds::test_sharp_null(df = testdf,
+##           TestMechs::test_sharp_null(df = testdf,
 ##                                      d = "treated",
 ##                                      m = "primarily_leblango",
 ##                                      y = "EL_EGRA_PCA_Index",
@@ -108,7 +108,7 @@
 ##       if(params$Fix_n1 == FALSE){
         
 ##         test_sharp_null_result <-
-##           MedBounds::test_sharp_null(df = testdf,
+##           TestMechs::test_sharp_null(df = testdf,
 ##                                      d = "treated",
 ##                                      m = "primarily_leblango",
 ##                                      y = "EL_EGRA_PCA_Index",
@@ -126,7 +126,7 @@
 ##       }else{ # no cluster argument if fix_n1 == TRUE
         
 ##         test_sharp_null_result <-
-##           MedBounds::test_sharp_null(df = testdf,
+##           TestMechs::test_sharp_null(df = testdf,
 ##                                      d = "treated",
 ##                                      m = "primarily_leblango",
 ##                                      y = "EL_EGRA_PCA_Index",
@@ -160,7 +160,7 @@
 ##   # 2. Error in solve.default(beta.sigma) :                                                                  
 ##   #   system is computationally singular: reciprocal condition number = 4.89739e-17
   
-##   MedBounds::test_sharp_null(df = testdf,
+##   TestMechs::test_sharp_null(df = testdf,
 ##                              d = "treated",
 ##                              m = "primarily_leblango",
 ##                              y = "EL_EGRA_PCA_Index",
