@@ -18,7 +18,7 @@ knitr::opts_chunk$set(
 <!-- badges: start -->
 <!-- badges: end -->
 
-The MedBounds package implements the methodology from the paper ["Testing
+The TestMechs package implements the methodology from the paper ["Testing
 Mechanisms"](https://www.jonathandroth.com/assets/files/TestingMechanisms_Draft.pdf)
 by Soonwoo Kwon and Jonathan Roth. The package provides tests for the "sharp
 null of full mediation", which conjectures that the effect of a treatment
