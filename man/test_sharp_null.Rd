@@ -23,11 +23,10 @@ test_sharp_null(
   fix_n1 = TRUE,
   lambda = "dd",
   use_nc = FALSE,
-  analytic_variance = FALSE,
-  defiers_share = 0,
+  analytic_variance = ifelse(method == "FSST", FALSE, TRUE),
+  max_defiers_share = 0,
   new_dof_CS = FALSE,
-  use_binary = FALSE,
-  refinement = FALSE
+  use_binary = NULL
 )
 }
 \arguments{
@@ -40,7 +39,7 @@ test_sharp_null(
 \item{y}{Name of the outcome variable, which is assumed to take a discrete
 support}
 
-\item{method}{Method to use. One of "ARP, "CS", "FSST", "CR"}
+\item{method}{Method to use. One of "ARP, "CS", "FSST"}
 
 \item{ordering}{A list with length equal to the cardinality of the support of the mediator variable. The name of each element corresponds to a point in the support, and each element is a vector that collects all m values that are less than or equal to this point. If ordering = NULL, the standard ordering is used. If length(m) > 1, then the default is the elementwise ordering.}
 
@@ -56,11 +55,11 @@ support}
 
 \item{alpha}{Significance level. Default is 0.05}
 
-\item{rearrange}{Logical variable indicating whether to rearrange the conditional probabilities to obey monotonicity. De}
+\item{rearrange}{Logical variable indicating whether to rearrange the conditional probabilities to obey monotonicity. Default is FALSE.}
 
 \item{eps_bar}{Cho and Russell (2023) truncation parameter}
 
-\item{enumerate}{Enumerate vertices for Cox and Shi (2023) implementataion?}
+\item{enumerate}{Enumerate vertices for Cox and Shi (2023) implementation?}
 
 \item{fix_n1}{Whether the number of treated units (or clusters) should be fixed in the bootstrap}
 
@@ -68,9 +67,9 @@ support}
 
 \item{use_nc}{If the data is clustered, should FSST use the number of clusters for determining lambda (versus total observations). Default is false.}
 
-\item{analytic_variance}{If TRUE, we use the analytic formula for the variance, rather than a bootstrap. Available if method if ARP or CS. Default is FALSE}
+\item{analytic_variance}{If TRUE, we use the analytic formula for the variance, rather than a bootstrap. Available if method is ARP or CS. Default is FALSE}
 
-\item{defiers_share}{Bound on the proportion of defiers in the population. Default is 0 which indicates that the monotonicity constraint is imposed.}
+\item{max_defiers_share}{Bound on the proportion of defiers in the population. Default is 0 which indicates that the monotonicity constraint is imposed.}
 
 \item{new_dof_CS}{Use the new degrees of freedom formula for Cox and Shi? Default is FALSE.}
 

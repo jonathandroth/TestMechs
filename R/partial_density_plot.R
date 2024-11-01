@@ -37,13 +37,13 @@ partial_density_plot <- function(df,
                                m = m,
                                y = y)
 
-
+  if (length(unique(df[[m]])) > 2) stop("This plot should be used only when M is binary")
   #If plot_nts = TRUE, re-run with m -> 1-m, d -> 1-d and flip the labels
   if(plot_nts == TRUE){
     df[[m]] <- 1- df[[m]]
     df[[d]] <- 1- df[[d]]
 
-    #If the default labels are given, re-do the defaults
+    # If the default labels are given, re-do the defaults
     # Note that D=1 after flipping corresponds to the original D=0
     # and likewise for M
     if(density_1_label == "f(Y,M=1|D=1)" & density_0_label == "f(Y,M=1|D=0)"){

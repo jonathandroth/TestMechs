@@ -1,4 +1,4 @@
 library(testthat)
-library(MedBounds)
+library(TestMechs)
 
-test_check("MedBounds")
+test_check("TestMechs")

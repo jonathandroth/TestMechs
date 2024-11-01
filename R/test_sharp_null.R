@@ -7,7 +7,7 @@
 #' @param m Name of the mediator variable(s)
 #' @param y Name of the outcome variable, which is assumed to take a discrete
 #'   support
-#' @param method Method to use. One of "ARP, "CS", "FSST", "CR"
+#' @param method Method to use. One of "ARP, "CS", "FSST"
 #' @param ordering A list with length equal to the cardinality of the support of the mediator variable. The name of each element corresponds to a point in the support, and each element is a vector that collects all m values that are less than or equal to this point. If ordering = NULL, the standard ordering is used. If length(m) > 1, then the default is the elementwise ordering.
 #' @param B Bootstrap size, default is 500
 #' @param cluster Cluster for bootstrap
@@ -15,14 +15,14 @@
 #' @param hybrid_kappa The first-stage size value of the ARP hybrid test. If NULL, the ARP conditional (non-hybrid) test is used. Default is alpha/10
 #' @param num_Ybins (Optional) If specified, Y is discretized into the given number of bins (if num_Ybins is larger than the number of unique values of Y, no changes are made)
 #' @param alpha Significance level. Default is 0.05
-#' @param rearrange Logical variable indicating whether to rearrange the conditional probabilities to obey monotonicity. De
+#' @param rearrange Logical variable indicating whether to rearrange the conditional probabilities to obey monotonicity. Default is FALSE.
 #' @param eps_bar Cho and Russell (2023) truncation parameter
-#' @param enumerate Enumerate vertices for Cox and Shi (2023) implementataion?
+#' @param enumerate Enumerate vertices for Cox and Shi (2023) implementation?
 #' @param fix_n1 Whether the number of treated units (or clusters) should be fixed in the bootstrap
 #' @param lambda Lambda value for FSST. Default is "dd" in which case the "data-driven" lambda recommended by FSST is used. If lambda = "ndd", the non data-driven recommendation is used. See Remark 4.2 of FSST.
 #' @param use_nc If the data is clustered, should FSST use the number of clusters for determining lambda (versus total observations). Default is false.
-#' @param analytic_variance If TRUE, we use the analytic formula for the variance, rather than a bootstrap. Available if method if ARP or CS. Default is FALSE
-#' @param defiers_share Bound on the proportion of defiers in the population. Default is 0 which indicates that the monotonicity constraint is imposed.
+#' @param analytic_variance If TRUE, we use the analytic formula for the variance, rather than a bootstrap. Available if method is ARP or CS. Default is FALSE
+#' @param max_defiers_share Bound on the proportion of defiers in the population. Default is 0 which indicates that the monotonicity constraint is imposed.
 #' @param new_dof_CS Use the new degrees of freedom formula for Cox and Shi? Default is FALSE.
 #' @param use_binary If TRUE, uses ARP and CS implementation that exploits the fact that there are no nuisance parameters when the mediator is binary
 #' @export
@@ -45,11 +45,10 @@ test_sharp_null <- function(df,
                             fix_n1 = TRUE,
                             lambda = "dd",
                             use_nc = FALSE,
-                            analytic_variance = FALSE,
-                            defiers_share = 0,
+                            analytic_variance = ifelse(method == "FSST", FALSE, TRUE),
+                            max_defiers_share = 0,
                             new_dof_CS = FALSE,
-                            use_binary = FALSE,
-                            refinement = FALSE){
+                            use_binary = NULL){
  
   ## Process the inputted df ----  
   # Remove missing values
@@ -58,63 +57,71 @@ test_sharp_null <- function(df,
                                m = m,
                                y = y)
 
+  
+  ## Evaluate whether M is binary
+  binary_M <- dplyr::n_distinct(df[m]) == 2
+  
+  ## Throw error if M is non-binary but use_binary = TRUE
+  if (!is.null(use_binary)) {
+    if (use_binary == TRUE & binary_M == FALSE) {
+      stop("M is non-binary in data, use_binary cannot be TRUE")
+    }
+  } 
+  else if (is.null(use_binary)) {
+    use_binary = binary_M
+  }
+
+  ## Set frac_ATs_affected to NULL for now, will allow for other values later on
+  frac_ATs_affected <- NULL
+  
+  ## Do not run the binary test when frac_ATs_affected is not null, since we want to test for the fraction of always-takers
+  if (!is.null(frac_ATs_affected) | !(max_defiers_share == 0)) {
+    if (method == "toru") {
+      stop("You cannot allow for defiers when method == `toru`")
+    }
+    use_binary = FALSE
+  }
+
+  ## Make sure lpinfer is installed if method == "FSST"
+  if (method == "FSST" & !require(lpinfer)) {
+    stop("You must install pacakge lpinfer to use the FSST method. You can install it by running
+devtools::install_github('conroylau/lpinfer')")
+  }
+  
+  ## Print confirmation, can delete this if you prefer
+  ## message(paste0("It is ", binary_M, " that M in data is binary"))
+  ## message(paste0("It is ", use_binary, " that binary test is used"))
+  
   ## Pass to more efficient algorithm when M is binary
   if (use_binary) {
-    if (method == "ARP") {
-      result <- test_sharp_null_arp_binary_m(df,
-                                             d,
-                                             m,
-                                             y,
-                                             ordering = ordering,
-                                             B = B,
-                                             cluster = cluster,
-                                             weight.matrix = weight.matrix,
-                                             alpha = alpha,
-                                             kappa = hybrid_kappa,
-                                             use_hybrid = T,
-                                             num_Ybins = num_Ybins,
-                                             analytic_variance = analytic_variance)
+    if (method %in% c("ARP", "CS", "FSST")) {
+      result <- test_sharp_null_binary_m(df,
+                                         d,
+                                         m,
+                                         y,
+                                         method = method,
+                                         ordering = ordering,
+                                         B = B,
+                                         cluster = cluster,
+                                         weight.matrix = weight.matrix,
+                                         alpha = alpha,
+                                         kappa = hybrid_kappa,
+                                         use_hybrid = T,
+                                         num_Ybins = num_Ybins,
+                                         fix_n1 = fix_n1,
+                                         lambda = lambda,
+                                         analytic_variance = analytic_variance,
+                                         refinement = TRUE)
       return(result)
-      
-    } else if (method == "CS") {
-      result <- test_sharp_null_coxandshi_binary_m(df,
-                                                   d,
-                                                   m,
-                                                   y,
-                                                   ordering = ordering,
-                                                   B = B,
-                                                   cluster = cluster,
-                                                   weight.matrix = weight.matrix,
-                                                   alpha = alpha,
-                                                   kappa = hybrid_kappa,
-                                                   use_hybrid = T,
-                                                   num_Ybins = num_Ybins,
-                                                   analytic_variance = analytic_variance,
-                                                   refinement = refinement)
-      return(result)
-    } else if (method == "FSST") {
-      result <- test_sharp_null_fsst_binary_m(df,
-                                              d,
-                                              m,
-                                              y,
-                                              ordering = ordering,
-                                              B = B,
-                                              cluster = cluster,
-                                              weight.matrix = weight.matrix,
-                                              alpha = alpha,
-                                              kappa = hybrid_kappa,
-                                              use_hybrid = T,
-                                              num_Ybins = num_Ybins,
-                                              analytic_variance = analytic_variance,
-                                              lambda = lambda)
-      return(result)
-    } else if (method == "toru") {
+    }
+    else if (method == "toru") {
       result <- test_sharp_null_toru(df, d, m, y, B = B, alpha = alpha,
                                      num_Ybins = NULL, cluster = cluster)
       
       return(result)
-    } else {
-      stop("Method must be either ARP or CS if use_binary = TRUE")
+    }
+    else {
+      stop("Method must be either ARP, CS, FSST or toru if use_binary = TRUE")
     }
   }
   
@@ -140,10 +147,17 @@ test_sharp_null <- function(df,
     df$m <- uni_m
     m <- "m"
   }
-
+  
   #Discretize y if needed
   if(!is.null(num_Ybins)){
     df[[y]] <- discretize_y(yvec = df[[y]], numBins = num_Ybins)
+  } else {
+    continuous_y_flag <- n / length(unique(df[[y]])) <= 30
+    if (continuous_y_flag) {
+      message("Y variable might be continuous. Discretize it by specifying num_Ybins. Default num_Ybins = 5 is used now.")
+      num_Ybins <- 5
+      df[[y]] <- discretize_y(yvec = df[[y]], numBins = num_Ybins)
+    }
   }
 
   yvec <- df[[y]]
@@ -159,7 +173,7 @@ test_sharp_null <- function(df,
   ## Construct the A matrices and beta.shp ----
 
   #Specify whether method requires us to input only inequalities
-  inequalities_only <- ifelse(method %in% c("ARP","CS", "CR"),
+  inequalities_only <- ifelse(method %in% c("ARP","CS"),
                               TRUE, FALSE )
 
   #Construct the relevant A matrices and beta.shp
@@ -167,8 +181,8 @@ test_sharp_null <- function(df,
                                         mvec = mvec,
                                         ordering = ordering,
                                         inequalities_only = inequalities_only,
-                                        defiers_share = defiers_share
-                                        )
+                                        max_defiers_share = max_defiers_share,
+                                        frac_ATs_affected = frac_ATs_affected)
 
   A.shp <- A_list$A.shp
   A.obs <- A_list$A.obs
@@ -183,11 +197,6 @@ test_sharp_null <- function(df,
   my_values <- purrr::cross_df(list(m=mvalues,y=yvalues)) %>%
     dplyr::arrange(m,y) %>%
     dplyr::select(y,m)
-
-  # Current version allows only rearrange = TRUE when method = CR
-  if (method == "CR") {
-    regarrange <- TRUE
-  }
 
   # Override analytic var if method = FSST
   if (method == "FSST") {
@@ -250,7 +259,7 @@ test_sharp_null <- function(df,
     } else {
       beta.obs_FSST <- c(list(beta.obs), beta.obs_list)
     }
-
+    
     lpm <- lpinfer::lpmodel(A.obs = A.obs,
                             A.shp = A.shp,
                             A.tgt = A.tgt,
@@ -275,169 +284,6 @@ test_sharp_null <- function(df,
     return(list(result = fsst_result, reject = (fsst_result$pval[1, 2] < alpha)))
   }
 
-  if (method == "CR") {
-    # Define target parameter
-    A.tgt <- A_list$A.tgt
-    len_x <- length(A.tgt)
-
-    params <- list(OutputFlag=0)
-
-
-    # Define gurobi model
-    model <- list()
-
-    A <- rbind(A.shp, A.obs)
-    rhs <- c(beta.shp, beta.obs)
-    lb <- rep(0, len_x)
-    ub <- rep(1, len_x)
-
-    # Combine lower and upper bound into matrix
-    model$A <- A
-    model$obj <- A.tgt
-    model$rhs <- rhs
-    model$lb  <- lb
-    model$ub  <- ub
-    model$sense <- rep('>', length(rhs))
-
-    # Optimize for "l"
-    model$modelsense <- 'min'
-    min.result <- gurobi::gurobi(model, params)
-
-    # Optimize for "u"
-    model$modelsense <- 'max'
-    max.result <- gurobi::gurobi(model, params)
-
-    # Draw perturbation
-    xi_obj <- runif(len_x) * eps_bar
-    xi_rhs <- runif(length(rhs)) * eps_bar
-    xi_lb <- runif(len_x) * eps_bar
-    xi_ub <- runif(len_x) * eps_bar
-
-    ############################################################################
-    # Compute LB-,LB+,UB-,UB+
-    ############################################################################
-
-    model$rhs <- rhs - xi_rhs
-    model$lb <- lb - xi_lb
-    model$ub <- ub + xi_ub
-
-    ############################################################################
-    # Compute LB-,UB-
-    model$obj<- A.tgt - xi_obj
-
-    # Optimize LB-
-    model$modelsense <- 'min'
-    min.result.m <- gurobi::gurobi(model, params)
-
-    # Record lower bound
-    lbminus <- min.result.m$objval
-
-    # Optimize UB-
-    model$modelsense <- 'max'
-    max.result.m <- gurobi::gurobi(model, params)
-
-    # Record lower bound
-    ubminus <- max.result.m$objval
-
-    #######################################################
-    # Compute LB+,UB+
-    model$obj <- A.tgt + xi_obj
-
-    # Optimize
-    model$modelsense <- 'min'
-    min.result.p <- gurobi::gurobi(model, params)
-
-    # Record lower bound
-    lbplus <- min.result.p$objval
-
-    # Optimize UB-
-    model$modelsense <- 'max'
-    max.result.p <- gurobi::gurobi(model, params)
-
-    # Rrecord upper bound
-    ubplus <- max.result.p$objval
-
-    ############################################################################
-    # Begin bootstrap procedure
-    boot_lbminus <- rep(NA, B)
-    boot_lbplus <- rep(NA, B)
-    boot_ubminus <- rep(NA, B)
-    boot_ubplus <- rep(NA, B)
-
-    for (b in 1:B) {
-
-      # Get beta.obs for bootstrap draw
-      beta.obs_b <- beta.obs_list[[b]]
-
-      # Update rhs
-      rhs_b <- c(beta.shp, beta.obs_b)
-
-      # Update model
-      model$rhs <- rhs_b - xi_rhs
-
-      ############################################################################
-      # Compute LB-,UB-
-      model$obj<- A.tgt - xi_obj
-
-      # Optimize LB-
-      model$modelsense <- 'min'
-      bmin.result.m <- gurobi::gurobi(model, params)
-
-      # Record lower bound
-      boot_lbminus[b] <- bmin.result.m$objval
-
-      # Optimize UB-
-      model$modelsense <- 'max'
-      bmax.result.m <- gurobi::gurobi(model, params)
-
-      # Record upper bound
-      boot_ubminus[b] <- bmax.result.m$objval
-
-      ###################################################
-      # Objective function for LB+ and UB+
-      model$obj<- A.tgt + xi_obj
-
-      # Optimize LB+
-      model$modelsense <- 'min'
-      bmin.result.p <- gurobi::gurobi(model, params)
-
-      # Record lower bound
-      boot_lbplus[b] <- bmin.result.p$objval
-
-      # Optimize UB+
-      model$modelsense <- 'max'
-      bmax.result.p <- gurobi::gurobi(model, params)
-
-      # Record upper bound
-      boot_ubplus[b] <- bmax.result.p$objval
-    }
-
-    # Compute indicator Dn
-    bn <- 1/sqrt(log(n))
-    Delta <- max(ubplus, ubminus) - min(lbminus, lbplus)
-    Dn <- (Delta > bn) + 0
-
-    # Calculate kappa
-    kappa <- (1 - alpha) * Dn + (1 - alpha/2) * (1 - Dn)
-
-    # Bootstrap quantities
-    lbminus_q <- sqrt(n) * (boot_lbminus - lbminus)
-    lbplus_q <- sqrt(n) * (boot_lbplus - lbplus)
-    ubminus_q <- -sqrt(n) * (boot_ubminus - ubminus)
-    ubplus_q <- -sqrt(n) * (boot_ubplus - ubplus)
-
-    # Select quantile according to kappa
-    psi_k_lb_minus <- quantile(lbminus_q, kappa)
-    psi_k_lb_plus <- quantile(lbplus_q, kappa)
-    psi_k_ub_minus <- quantile(ubminus_q, kappa)
-    psi_k_ub_plus <- quantile(ubplus_q, kappa)
-
-    #compute confidence set for alpha=0.05
-    CSlb <- min(lbminus, lbplus) - (1/sqrt(n)) * max(psi_k_lb_minus, psi_k_lb_plus)
-    CSub <- max(ubminus, ubplus) + (1/sqrt(n)) * max(psi_k_ub_minus, psi_k_ub_plus)
-
-    return(list(CI = c(CSlb, CSub), reject = (0 < CSlb)))
-  }
 
   if(method %in% c("ARP", "CS")){
 
@@ -833,7 +679,7 @@ test_sharp_null <- function(df,
   }
 
 
-  stop("method must be one of ARP, CS, FSST, CR")
+  stop("method must be one of ARP, CS, FSST")
 
 }
 
@@ -843,7 +689,8 @@ construct_Aobs_Ashp_betashp <- function(yvec,
                                         mvec,
                                         ordering,
                                         inequalities_only = F,
-                                        defiers_share = 0){
+                                        max_defiers_share = 0,
+                                        frac_ATs_affected = NULL){
 
   # Cardinality of the supports of Y and M
   d_y <- length(unique(yvec))
@@ -863,11 +710,15 @@ construct_Aobs_Ashp_betashp <- function(yvec,
   # x = (theta, delta, zeta, kappa, eta)
   # zeta, kappa: nuisance par to convert inequalities to equalities
   # eta: nuisance par to create target par (= theta_kk TV_kk)
+  
+  # If testing the fraction of ATs, then:
+  # x = (theta, delta, zeta, kappa, eta, iota, gamma, epsilon)
+  # iota: defined to be v_k theta_kk
+  # gamma: nuisance par to convert inequalities to equalities
+  # epsilon: nuisance par to create target par
 
   par_lengths <- c("theta" = K^2, "delta" = d_y * K, "zeta" = K,
                    "kappa" = d_y * K, "eta" = K)
-  
-  len_x <- sum(par_lengths)
   
   parameter_types <- c(rep("theta", par_lengths[["theta"]]),
                        rep("delta", par_lengths[["delta"]]),
@@ -880,9 +731,27 @@ construct_Aobs_Ashp_betashp <- function(yvec,
   zeta_indices <- which(parameter_types == "zeta")
   kappa_indices <- which(parameter_types == "kappa")
   eta_indices <- which(parameter_types == "eta")
-
-
-
+  
+  # If testing the fraction of ATs, include the additional params
+  if (!is.null(frac_ATs_affected)) {
+    
+    # iota is eta in Jon's note, for implementing the fraction of always takers affected.
+    # gamma is nuisance par to convert inequalities to equalities.
+    # epsilon: nuisance par to create target par for the new constraints
+    
+    par_lengths <- c(par_lengths, "iota" = K, "gamma" = K + 1, "epsilon" = K + 1)
+    parameter_types <- c(parameter_types,
+                         rep("iota", par_lengths[["iota"]]),
+                         rep("gamma", par_lengths[["gamma"]]),
+                         rep("epsilon", par_lengths[["epsilon"]]))
+    iota_indices <- which(parameter_types == "iota")
+    gamma_indices <- which(parameter_types == "gamma")
+    epsilon_indices <- which(parameter_types == "epsilon")
+  }
+  
+  len_x <- sum(par_lengths)
+  
+  
   # Set theta_lk = 0 for l > k using
   # Matrix that encodes whether l > k
   l_gt_k_mat <- matrix(NA, K, K)
@@ -896,13 +765,13 @@ construct_Aobs_Ashp_betashp <- function(yvec,
   l_gt_k_inds <- which(l_gt_k_mat)
 
   # Set shape constraints using A.shp x = beta.shp
-  if (defiers_share == 0) {
+  if (max_defiers_share == 0) {
     A.shp <- matrix(0, nrow = K, ncol = len_x)
   } else {
     A.shp <- matrix(0, nrow = K + 1, ncol = len_x)
   }
   
-
+  
   # Set bound on sum_{l!=k} theta_lk - sum_q delta_qk
   # Also includes eta_kk (= theta_kk TV_kk) as a "nuisance" parameter
   for (k in 1:K) {
@@ -915,12 +784,44 @@ construct_Aobs_Ashp_betashp <- function(yvec,
     # TV_kk "nuisance" parameters
     A.shp[k, sum(par_lengths[1:4]) + k] <- 1
   }
+  
+  
+  ## If testing the fraction of ATs, need to update previously defined inequalities and include new inequalities
+  ## For more details, please refer to Jon's notes.
+  if (!is.null(frac_ATs_affected)) {
+    
+    ## Coefficients for iota, for equation 2
+    A.shp[1:K, sum(par_lengths[1:5]) + 1:K] <- diag(K)
+    
+    ## For equation 3 and 4
+    temp <- matrix(0, nrow = K + 1, ncol = len_x)
+    
+    # for equation 4
+    for (k in 1:K) { 
+      temp[k, (k-1) * K + k] <- 1    # theta_kk has coefficient 1
+      temp[k, sum(par_lengths[1:5]) + k] <- -1  # iota_k has coefficient -1
+      temp[k, sum(par_lengths[1:6]) + k] <- -1  # gamma is slack parameter for turning ineq into eq
+      temp[k, sum(par_lengths[1:7]) + k] <- 1 # epsilon is the FSST target param
+    }
+    
+    # for equation 3
+    temp[K+1, 1:par_lengths[1]] <- colSums(temp[1:K, 1:par_lengths[1]]) * frac_ATs_affected  # summing thetas
+    temp[K+1, sum(par_lengths[1:5]) + 1:K] <- -1  # summing iotas
+    temp[K+1, sum(par_lengths[1:7])] <- -1 # gamma converting inequalities into equalities
+    temp[K+1, sum(par_lengths[1:7]) + K + 1] <- 1 # epsilon is the FSST target param
+    
+    A.shp <- rbind(A.shp, temp)
+  }
 
-
-  if (defiers_share == 0) {
-    if (inequalities_only == T) {
-      #Remove both the extraneous thetas *and* kappa,zeta,eta
-      A.shp <- A.shp[, -c(l_gt_k_inds, kappa_indices, eta_indices, zeta_indices)]
+  
+  if (max_defiers_share == 0) {
+    if (inequalities_only) {
+      # Because these are for the inequalities to become equalities. eta is the FSST target param which is a nuisance param
+      if (is.null(frac_ATs_affected)) {
+        A.shp <- A.shp[, -c(l_gt_k_inds, zeta_indices, kappa_indices, eta_indices)]
+      } else { # If testing the fraction of ATs, remove the additional nuisance pars
+        A.shp <- A.shp[, -c(l_gt_k_inds, zeta_indices, kappa_indices, eta_indices, gamma_indices, epsilon_indices)]
+      }
 
       #Add shape constraint that all parameters are >= 0 (this is not enforced by ARP)
       A.shp <- rbind(A.shp, diag(NCOL(A.shp)))
@@ -934,28 +835,41 @@ construct_Aobs_Ashp_betashp <- function(yvec,
 
     A.shp[K + 1, l_gt_k_inds] <- - 1
 
-    if (inequalities_only == T) {
+    if (inequalities_only) {
       #Remove both the extraneous thetas *and* kappa,zeta,eta
-      A.shp <- A.shp[, -c(kappa_indices, eta_indices, zeta_indices)]
-
+      if (is.null(frac_ATs_affected)) {
+        A.shp <- A.shp[, -c(zeta_indices, kappa_indices, eta_indices)]
+      } else { # If testing the fraction of ATs, remove the additional nuisance pars
+        A.shp <- A.shp[, -c(zeta_indices, kappa_indices, eta_indices, gamma_indices, epsilon_indices)]
+      }
       #Add shape constraint that all parameters are >= 0 (this is not enforced by ARP)
       A.shp <- rbind(A.shp, diag(NCOL(A.shp)))
 
-    } else {    
-      # Inequalities to equalities for defiers_share
-      A.shp <- cbind(A.shp, c(rep(0, K), -1))
+    } else {
+      
+      # Inequalities to equalities for max_defiers_share
+      if (!is.null(frac_ATs_affected)) {
+        A.shp <- cbind(A.shp, c( rep(0, K), -1, rep(0, K+1) )) # A slackness param which is greater than or equal to 0 to impose equality 
+      } else { 
+        A.shp <- cbind(A.shp, c(rep(0, K), -1)) # A slackness param which is greater than or equal to 0 to impose equality 
+      }
+      
+      # Update the list of parameters
+      par_lengths <- c(par_lengths, "defier_zeta" = 1)
+      parameter_types <- c(parameter_types, "defier_zeta")
+      defier_zeta_indices <- which(parameter_types == "defier_zeta")
+      
+      len_x <- sum(par_lengths)
     }
   }
 
   beta.shp <- rep(0, NROW(A.shp))
 
-  if (defiers_share != 0) {
-    beta.shp[K + 1]  <- - defiers_share
+  if (max_defiers_share != 0) {
+    beta.shp[K + 1]  <- - max_defiers_share
   }
 
-
-
-
+  
   # Set remaining constraints using A.obs x = beta.obs
 
   # Define A.obs
@@ -984,10 +898,14 @@ construct_Aobs_Ashp_betashp <- function(yvec,
                 sum(par_lengths[1:3]) + ((k-1) * d_y + 1):(k * d_y))] <- -1
   }
 
-  if (defiers_share == 0) {
+  if (max_defiers_share == 0) {
     if (inequalities_only) {
       # Remove both the extraneous thetas *and* kappa,zeta,eta
-      A.obs <- A.obs[, -c(l_gt_k_inds, kappa_indices, eta_indices, zeta_indices)]
+      if (is.null(frac_ATs_affected)) {
+        A.obs <- A.obs[, -c(l_gt_k_inds, zeta_indices, kappa_indices, eta_indices)]
+      } else { # If testing the fraction of ATs, remove the additional nuisance pars
+        A.obs <- A.obs[, -c(l_gt_k_inds, zeta_indices, kappa_indices, eta_indices, gamma_indices, epsilon_indices)]
+      }
 
       # The first 2K rows of A.obs are equality constraints, so we duplicate
       # them with opposite signs to get equalities as inequalities
@@ -998,16 +916,15 @@ construct_Aobs_Ashp_betashp <- function(yvec,
       #Remove the extraneous thetas only
       A.obs <- A.obs[, -c(l_gt_k_inds)]
     }
-
-    #Create A.tgt (only used for lpinfer functions)
-    A.tgt <- numeric(len_x)
-    A.tgt[sum(par_lengths[1:4]) + (1:K)] <- 1
-    A.tgt <- A.tgt[-l_gt_k_inds]
     
   } else {
     if (inequalities_only) {
       # Remove kappa,zeta,eta
-      A.obs <- A.obs[, -c(kappa_indices, eta_indices, zeta_indices)]
+      if (is.null(frac_ATs_affected)) {
+        A.obs <- A.obs[, -c(zeta_indices, kappa_indices, eta_indices)]
+      } else { # If testing the fraction of ATs, remove the additional nuisance pars
+        A.obs <- A.obs[, -c(zeta_indices, kappa_indices, eta_indices, gamma_indices, epsilon_indices)]
+      }
 
       # The first 2K rows of A.obs are equality constraints, so we duplicate
       # them with opposite signs to get equalities as inequalities
@@ -1015,14 +932,23 @@ construct_Aobs_Ashp_betashp <- function(yvec,
                      -A.obs[1:(2 * K),],
                      A.obs[(2 * K + 1):NROW(A.obs), ])
     } 
-
-    #Create A.tgt (only used for lpinfer functions)
-    A.tgt <- numeric(len_x)
-    A.tgt[sum(par_lengths[1:4]) + (1:K)] <- 1
-
   }
   
-
+  # Create A.tgt (only used for lpinfer functions)
+  A.tgt <- numeric(len_x)
+  A.tgt[sum(par_lengths[1:4]) + (1:K)] <- 1
+  
+  # If testing the fraction of ATs, include the additional target pars
+  if (!is.null(frac_ATs_affected)) {
+    A.tgt[sum(par_lengths[1:7]) + 1:(K+1)] <- 1
+  }
+  
+  # Remove the defier theta column
+  if (max_defiers_share == 0) {
+    A.tgt <- A.tgt[-l_gt_k_inds]
+  }
+  
+  
 
   return(list(A.obs = A.obs,
               A.shp = A.shp,

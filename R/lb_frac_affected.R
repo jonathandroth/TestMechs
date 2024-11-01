@@ -1,34 +1,49 @@
-#' @title Bounds on fraction of always-takers affected with a multi-valued discrete or multi-dimensional discrete m
-#'@description Computes  a lower bound on the TV distance btwn Y(1,m) and Y(0,m) for always takers
-#' who have M(1)=M(0)=m if at_group=m. This is a lower bound on the fraction of these ATs for whom there is a direct effect of D on Y
-#' If at_group=NULL, it computes a lower bound on the weighted average across all ATs, weighted by their proportion in the population
+#' @title Bounds on fraction of always-takers affected with a multi-valued
+#'   discrete or multi-dimensional discrete m
+#' @description Computes a lower bound on the TV distance btwn Y(1,m) and Y(0,m)
+#'   for always takers who have M(1)=M(0)=m if at_group=m. This is a lower bound
+#'   on the fraction of these ATs for whom there is a direct effect of D on Y If
+#'   at_group=NULL, it computes a lower bound on the weighted average across all
+#'   ATs, weighted by their proportion in the population
 #' @param df A data frame
 #' @param d Name of the treatment variable in the df
 #' @param m Vector of the mediator variable
 #' @param y Name of the outcome variable
-#' @param w (Optional) Name of weighting variable. If null, equal weights are used
-#' @param at_group (Optional) Value of m specifying which always-takers to compute lower bounds of TV for.
-#' If at_group is specified, then we compute a lower bound on TV between Y(1,at_group) and Y(0,at_group) for
-#' ATs who have M(1)=M(0)=at_group. If at_group is null (the default), we compute a lower bound on
-#' the weighted average of TV across all always-takers, with weights proportional to shares in population
-#' @param continuous_Y (Optional) Whether Y should be treated as continuous, in which case kernel density is used, or discrete. Default is TRUE.
-#' @param num_Ybins (Optional) If specified, Y is discretized into the given number of bins (if num_Ybins is larger than the number of unique values of Y, no changes are made)
-#' @param max_defier_share (Optional) If specified, up to max_defier_share fraction of the population can be defiers (of any type). Default is zero
-#' @param allow_min_defiers (Optional) If the bound on defiers (max_defier_share) is inconsistent with the data, proceed by allowing the minimum number of defiers compatible with the data. Otherwise, throw an error. Default is FALSE
-#' @param return_min_defiers (Optional) If true, the function returns the minimum number of defiers consistent with the data rather than the TV bounds
+#' @param w (Optional) Name of weighting variable. If null, equal weights are
+#'   used
+#' @param at_group (Optional) Value of m specifying which always-takers to
+#'   compute lower bounds of TV for.  If at_group is specified, then we compute
+#'   a lower bound on TV between Y(1,at_group) and Y(0,at_group) for ATs who
+#'   have M(1)=M(0)=at_group. If at_group is null (the default), we compute a
+#'   lower bound on the weighted average of TV across all always-takers, with
+#'   weights proportional to shares in population
+#' @param continuous_Y (Optional) Whether Y should be treated as continuous, in
+#'   which case kernel density is used, or discrete. Default is TRUE.
+#' @param num_Ybins (Optional) If specified, Y is discretized into the given
+#'   number of bins (if num_Ybins is larger than the number of unique values of
+#'   Y, no changes are made)
+#' @param max_defiers_share (Optional) If specified, up to max_defier_share
+#'   fraction of the population can be defiers (of any type). Default is zero
+#' @param allow_min_defiers (Optional) If the bound on defiers
+#'   (max_defier_share) is inconsistent with the data, proceed by allowing the
+#'   minimum number of defiers compatible with the data. Otherwise, throw an
+#'   error. Default is FALSE
+#' @param return_min_defiers (Optional) If true, the function returns the
+#'   minimum number of defiers consistent with the data rather than the TV
+#'   bounds
 #' @export
 
-compute_tv_ats_multiple_m <- function(df,
-                                      d,
-                                      m,
-                                      y,
-                                      at_group = NULL,
-                                      w = NULL,
-                                      continuous_Y = base::ifelse(is.null(num_Ybins),TRUE,FALSE),
-                                      num_Ybins = NULL,
-                                      max_defier_share = 0,
-                                      allow_min_defiers = FALSE,
-                                      return_min_defiers = FALSE){
+lb_frac_affected <- function(df,
+                             d,
+                             m,
+                             y,
+                             at_group = NULL,
+                             w = NULL,
+                             continuous_Y = base::ifelse(is.null(num_Ybins),TRUE,FALSE),
+                             num_Ybins = NULL,
+                             max_defiers_share = 0,
+                             allow_min_defiers = FALSE,
+                             return_min_defiers = FALSE){
 
   df <- remove_missing_from_df(df = df,
                                d = d,
@@ -156,16 +171,16 @@ compute_tv_ats_multiple_m <- function(df,
       #Return the min defier share if specified
       if(return_min_defiers){return(min_defier_share)}
 
-      if(min_defier_share > max_defier_share){
+      if(min_defier_share > max_defiers_share){
         if(allow_min_defiers){
-          max_defier_share <- min_defier_share + 10^(-6) #update max defier share to the optimum plus a small tolerance
-          warning(paste0("The data is incompatible with the specified max_defier_share.
+          max_defiers_share <- min_defier_share + 10^(-6) #update max defier share to the optimum plus a small tolerance
+          warning(paste0("The data is incompatible with the specified max_defiers_share.
                            Setting this to the min value compatible with the data:",
-                         max_defier_share))
+                         max_defiers_share))
         }else{
-          stop(paste0("The data is incompatible with the specified max_defier_share. \n
+          stop(paste0("The data is incompatible with the specified max_defiers_share. \n
                         The specified value is ",
-                      max_defier_share, " but the min compatible with the data is ", min_defier_share))
+                      max_defiers_share, " but the min compatible with the data is ", min_defier_share))
         }
       }
     }
@@ -178,8 +193,8 @@ compute_tv_ats_multiple_m <- function(df,
       Reduce(rbind,
              purrr::map(.x = 1:NROW(mvalues),
                         .f = function(m_index){ purrr::map_lgl(.x = 1:NROW(m1_types),
-                                                               .f = ~MedBounds:::row_equals(m1_types[.x,], mvalues[m_index,] ) &
-                                                                     !MedBounds:::row_equals(m0_types[.x,], mvalues[m_index,] ))  })
+                                                               .f = ~TestMechs:::row_equals(m1_types[.x,], mvalues[m_index,] ) &
+                                                                     !TestMechs:::row_equals(m0_types[.x,], mvalues[m_index,] ))  })
             )
         # base::lapply(X = 1:NROW(mvalues),
         #              FUN = function(i){base::sapply(1:NROW(m1_types), function(s){ base::all(m1_types[s,] == mvalues[i,]) & !base::all(m0_types[s,] == m0_types[i,]) })}))
@@ -199,7 +214,7 @@ compute_tv_ats_multiple_m <- function(df,
 
 
     #Combine the constants associated with the matrices
-    d <- c(p_m_1, p_m_0, max_p_diffs, max_defier_share)
+    d <- c(p_m_1, p_m_0, max_p_diffs, max_defiers_share)
 
     #Specify the direction of the equalities/inequalities
     dir <- c(rep("==", 2*NROW(m1_marginals_constraints_matrix)),
@@ -224,8 +239,8 @@ compute_tv_ats_multiple_m <- function(df,
 
       #Find the index i such that the ith row of m0_types and m1_types are equal to at_group
       at_group_index <- which(purrr::map_lgl(.x = 1:NROW(m0_types),
-                                             .f = ~MedBounds:::row_equals(m0_types[.x,], at_group) &
-                                               MedBounds:::row_equals(m1_types[.x,], at_group)))
+                                             .f = ~TestMechs:::row_equals(m0_types[.x,], at_group) &
+                                               TestMechs:::row_equals(m1_types[.x,], at_group)))
 
       #Thus denominator is a basis vector with one in pos corresponding to thetakk
       obj_denominator <- rep(0, NCOL(constraints_matrix))
@@ -256,7 +271,7 @@ compute_tv_ats_multiple_m <- function(df,
     }
     #Use Rglpk to solve the fraction-linear program to minimize the weighted average of TV
       #We capture warnings if the denom can be zero
-    quiet_fractional_LP <- purrr::quietly(MedBounds:::Rglpk_solve_fractional_LP)
+    quiet_fractional_LP <- purrr::quietly(TestMechs:::Rglpk_solve_fractional_LP)
     max_violation <-
       quiet_fractional_LP(
         obj_numerator = obj_numerator,
@@ -454,7 +469,7 @@ compute_max_p_difference <- function(dvec, mdf, yvec, wvec=NULL,
 
 #' @export
 #' @title Finds the minimum number of defiers compatible with the sharp null
-#'@description This function finds the minimum value of max_defier_share such that compute_tv_ats_multiple_m returns zero
+#'@description This function finds the minimum value of max_defiers_share such that compute_tv_ats_multiple_m returns zero
 #' @param df A data frame
 #' @param d Name of the treatment variable in the df
 #' @param m Vector of the mediator variable
@@ -478,11 +493,11 @@ breakdown_defier_share <- function(df,
 
   tol <- 10^(-4)
 
-  #Function for computing the lb as a function of max_defier_share
-  lb_fn <- function(max_defier_share){
+  #Function for computing the lb as a function of max_defiers_share
+  lb_fn <- function(max_defiers_share){
     min_tv <-
     base::suppressWarnings(
-    compute_tv_ats_multiple_m(df = df,
+    lb_frac_affected(df = df,
                               d = d,
                               m = m,
                               y = y ,
@@ -490,16 +505,16 @@ breakdown_defier_share <- function(df,
                               w = w,
                               continuous_Y = continuous_Y,
                               num_Ybins = num_Ybins,
-                              max_defier_share = max_defier_share))
+                              max_defiers_share = max_defiers_share))
 
-    #If the lb on ATs is zero, compute_tv_ats_multiple_m returns zero
+    #If the lb on ATs is zero, lb_frac_affected returns zero
     #For our purposes, we treat this as a zero
     if(is.nan(min_tv)){min_tv <- 0}
     return(min_tv)
   }
 
   # Compute the min defier share compatible with the data
-  min_compatible_defiers <-     compute_tv_ats_multiple_m(df = df,
+  min_compatible_defiers <-     lb_frac_affected(df = df,
                                                           d = d,
                                                           m = m,
                                                           y = y ,
@@ -507,7 +522,7 @@ breakdown_defier_share <- function(df,
                                                           w = w,
                                                           continuous_Y = continuous_Y,
                                                           num_Ybins = num_Ybins,
-                                                          max_defier_share = max_defier_share,
+                                                          max_defiers_share = max_defiers_share,
                                                           return_min_defiers = TRUE)
 
 
