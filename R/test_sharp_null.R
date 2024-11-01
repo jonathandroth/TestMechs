@@ -76,6 +76,9 @@ test_sharp_null <- function(df,
   
   ## Do not run the binary test when frac_ATs_affected is not null, since we want to test for the fraction of always-takers
   if (!is.null(frac_ATs_affected) | !(max_defiers_share == 0)) {
+    if (method == "toru") {
+      stop("You cannot allow for defiers when method == `toru`")
+    }
     use_binary = FALSE
   }
 
