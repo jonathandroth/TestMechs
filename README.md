@@ -1,12 +1,12 @@
 
 <!-- README.md is generated from README.Rmd. Please edit that file -->
 
-# MedBounds
+# TestMechs
 
 <!-- badges: start -->
 <!-- badges: end -->
 
-The MedBounds package implements the methodology from the paper
+The TestMechs package implements the methodology from the paper
 [“Testing
 Mechanisms”](https://www.jonathandroth.com/assets/files/TestingMechanisms_Draft.pdf)
 by Soonwoo Kwon and Jonathan Roth. The package provides tests for the
@@ -22,7 +22,7 @@ the mediator $M$ to be discrete.
 
 ## Installation
 
-You can install the development version of MedBounds from
+You can install the development version of TestMechs from
 [GitHub](https://github.com/) with:
 
 ``` r
@@ -30,7 +30,7 @@ You can install the development version of MedBounds from
 install.packages("devtools")
 
 # Install package
-devtools::install_github("jonathandroth/MedBounds")
+devtools::install_github("jonathandroth/TestMechs")
 ```
 
 ## Application to Baranov et al. (2020)
@@ -50,8 +50,8 @@ mechanisms.
 We start with loading the required packages and the data.
 
 ``` r
-# Load MedBounds
-library(MedBounds)
+# Load TestMechs
+library(TestMechs)
 
 # Load other packages that are required to run the example
 library(dplyr)
@@ -185,10 +185,10 @@ test_result <- test_sharp_null(df = mother_data,
 
 test_result$pval
 #>            [,1]
-#> [1,] 0.02383182
+#> [1,] 0.02283916
 ```
 
-The test gives a p-value of 0.024, and thus the *sharp null* is rejected
+The test gives a p-value of 0.023, and thus the *sharp null* is rejected
 at the 5% significance level. Here, the p-value corresponds to the
 smallest value of $\alpha$ for which the test rejects. As mentioned
 above, we discretize the outcome variable to 5 bins as can be seen from
@@ -238,7 +238,7 @@ never-takers when $M$ is binary.)
 
 ### Allowing for defiers
 
-By default, MedBounds imposes the monotonicity assumption that the
+By default, TestMechs imposes the monotonicity assumption that the
 treatment can only increase the value of $M$. In this setting, this
 means that everyone who would have a grandmother present without
 receiving CBT treatment would also have one present when receiving CBT
@@ -258,7 +258,6 @@ test_result_defiers <- test_sharp_null(df = mother_data,
                                        num_Ybins = 5,
                                        cluster = "uc",
                                        max_defiers_share = .01)
-#> Loading required package: lpinfer
 
 test_result_defiers$pval
 #>            [,1]

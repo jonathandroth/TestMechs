@@ -193,8 +193,8 @@ lb_frac_affected <- function(df,
       Reduce(rbind,
              purrr::map(.x = 1:NROW(mvalues),
                         .f = function(m_index){ purrr::map_lgl(.x = 1:NROW(m1_types),
-                                                               .f = ~MedBounds:::row_equals(m1_types[.x,], mvalues[m_index,] ) &
-                                                                     !MedBounds:::row_equals(m0_types[.x,], mvalues[m_index,] ))  })
+                                                               .f = ~TestMechs:::row_equals(m1_types[.x,], mvalues[m_index,] ) &
+                                                                     !TestMechs:::row_equals(m0_types[.x,], mvalues[m_index,] ))  })
             )
         # base::lapply(X = 1:NROW(mvalues),
         #              FUN = function(i){base::sapply(1:NROW(m1_types), function(s){ base::all(m1_types[s,] == mvalues[i,]) & !base::all(m0_types[s,] == m0_types[i,]) })}))
@@ -239,8 +239,8 @@ lb_frac_affected <- function(df,
 
       #Find the index i such that the ith row of m0_types and m1_types are equal to at_group
       at_group_index <- which(purrr::map_lgl(.x = 1:NROW(m0_types),
-                                             .f = ~MedBounds:::row_equals(m0_types[.x,], at_group) &
-                                               MedBounds:::row_equals(m1_types[.x,], at_group)))
+                                             .f = ~TestMechs:::row_equals(m0_types[.x,], at_group) &
+                                               TestMechs:::row_equals(m1_types[.x,], at_group)))
 
       #Thus denominator is a basis vector with one in pos corresponding to thetakk
       obj_denominator <- rep(0, NCOL(constraints_matrix))
@@ -271,7 +271,7 @@ lb_frac_affected <- function(df,
     }
     #Use Rglpk to solve the fraction-linear program to minimize the weighted average of TV
       #We capture warnings if the denom can be zero
-    quiet_fractional_LP <- purrr::quietly(MedBounds:::Rglpk_solve_fractional_LP)
+    quiet_fractional_LP <- purrr::quietly(TestMechs:::Rglpk_solve_fractional_LP)
     max_violation <-
       quiet_fractional_LP(
         obj_numerator = obj_numerator,
