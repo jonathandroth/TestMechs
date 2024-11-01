@@ -172,7 +172,8 @@ Shi (2023), which is our recommended approach for most applications. The
 package supports using the tests provided by Andrews, Roth, and Pakes
 (2023) and Fang, Santos, Shaikh, and Torgovitsky (2023); these methods
 can be specified by changing the `method` argument from `"CS"` to
-`"ARP"` or `"FSST"`.
+`"ARP"` or `"FSST"`. When M is binary, as in our example here, one can
+also use the test from Kitagawa (2015) by setting `method = "toru"`.
 
 ``` r
 test_result <- test_sharp_null(df = mother_data,
