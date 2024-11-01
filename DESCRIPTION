@@ -4,7 +4,7 @@ Title: Bounds on direct effects for always-takers/never-takers
 Version: 0.1.0
 Author: Soonwoo Kwon, Jonathan Roth
 Maintainer: Jonathan Roth <jonathan_roth@brown.edu>
-Description: Mediation analysis with binary treatment D and mediator M. Computes various measures related to direct effect of D on Y for those with constant M (always-takers or never-takers)
+Description: Provides tests for the "sharp null of full mediation" that a treatment D operates on an outcome Y only through a mediator (or set of mediators) M. Also provides lower bounds on the extent to which this null is violated, e.g. lower bounds on the fraction of "always-takers" who are affected by the treatment despite having no change in M. 
 License: GPL (>= 3)
 Encoding: UTF-8
 LazyData: true
