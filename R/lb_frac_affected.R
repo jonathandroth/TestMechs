@@ -193,7 +193,7 @@ lb_frac_affected <- function(df,
       Reduce(rbind,
              purrr::map(.x = 1:NROW(mvalues),
                         .f = function(m_index){ purrr::map_lgl(.x = 1:NROW(m1_types),
-                                                               .f = ~MedBounds:::row_equals(m1_types[.x,], mvalues[m_index,] ) &
+                                                               .f = ~TestMechs:::row_equals(m1_types[.x,], mvalues[m_index,] ) &
                                                                      !TestMechs:::row_equals(m0_types[.x,], mvalues[m_index,] ))  })
             )
         # base::lapply(X = 1:NROW(mvalues),
