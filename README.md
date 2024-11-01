@@ -126,11 +126,11 @@ This figure shows estimates of $P(Y=y,M=0 \mid D=d)$ for both $d=1$ and
 $d=0$. Under monotonicity, as shown in Section 2 of the paper, we should
 have that $P(Y=y, M=0 \mid D=1) \leq P(Y=y, M=0 \mid D=0)$ for all
 values of $y$. In other words, there should be a *negative* treatment
-effect on the compound outcome $1[Y=y,M=0]$ (e.g. have outcome 5 and no
-grandmother present). As shown in the figure, however, this inequality
-appears to be violated at large values of $y$, suggesting that the
-outcome for some treated never-takers improved when receiving the
-treatment.
+effect on the compound outcome $1[Y=y,M=0]$ (i.e. have outcome $y$ and
+no grandmother present). As shown in the figure, however, this
+inequality appears to be violated at large values of $y$, suggesting
+that the outcome for some treated never-takers improved when receiving
+the treatment.
 
 The argument `plot_nts = T` tells the package to make a plot showing the
 inequalities corresponding to there being no treatment effect for the
@@ -182,6 +182,7 @@ test_result <- test_sharp_null(df = mother_data,
                                method = "CS", #use Cox and Shi test
                                num_Ybins = 5, #discretize using 5 bins
                                cluster = "uc") #cluster SEs at uc level
+#> Loading required package: lpinfer
 
 test_result$pval
 #>            [,1]
@@ -323,13 +324,20 @@ lb_frac_affected(df = mother_data,
 #> [1] 0.1002207
 ```
 
-Here, the parameter `at_group = NULL` makes the function to compute the
+Here, the parameter `at_group = NULL` asks the function compute the
 lower bound on the fraction of always-takers, pooled across different
-$M$ values to be around 10 percent. (The empirical distribution suggests
-a small violation of monotonicity, although it is not statistically
-significant; the argument `allow_min_defiers = TRUE` calculates the
-lower bound allowing for the minimum number of defiers consistent with
-the empirical distribution — see footnote 25 of the paper for details.)
+$M$ values, which it calculates to be around 10 percent. (The empirical
+distribution suggests a small violation of monotonicity, although it is
+not statistically significant; the argument `allow_min_defiers = TRUE`
+calculates the lower bound allowing for the minimum number of defiers
+consistent with the empirical distribution — see footnote 25 of the
+paper for details.)
+
+We note that while the method works with multi-valued discrete mediators
+(such as our 1-5 score), we generally expect the power of the test to
+decrease as one approaches an approximately continuous mediator. See the
+discussion in Remarks 2 and 3 of the paper regarding power and
+discretization of $M$.
 
 ### Combination of both mechanisms
 
@@ -371,5 +379,5 @@ lb_frac_both
 #> [1] 0.07251284
 ```
 
-We estimate a lower bound of 7 percent, but this does not appear to be
-statistically significant given the test result above.
+We estimate a lower bound of 7 percent, although this does not appear to
+be statistically significant given the test result above.
