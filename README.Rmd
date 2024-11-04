@@ -140,8 +140,8 @@ at_plot <-
                        y = "motherfinancial",
                        num_Ybins = 5,
                        plot_nts = F,
-                       density_1_label = "Prob. In Treated Group (P(Y,M=0|D=1))",
-                       density_0_label = "Prob. In Control Group (P(Y,M=0|D=0))") +
+                       density_1_label = "Prob. In Treated Group (P(Y,M=1|D=1))",
+                       density_0_label = "Prob. In Control Group (P(Y,M=1|D=0))") +
   ylab("Probability") +
   xlab("Event: Grandmother Present (M=1) and Y in Stated Range")
 
