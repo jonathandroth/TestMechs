@@ -60,7 +60,7 @@ lb_frac_affected <- function(df,
   }
 
   dvec <- df[[d]]
-  mdf <- df[,m]
+  mdf <- df[,m, drop = FALSE]
 
   if(is.null(w)){
     wvec <- rep(1, NROW(df))
@@ -82,8 +82,8 @@ lb_frac_affected <- function(df,
     #Create a list of all possible compliance types. This is all possible pairwise combinations of unique rows of mdf
      #First, create a data frame containing all combinations of the row numbers of mvalues
     mvalues_df <- base::expand.grid(1:NROW(mvalues), 1:NROW(mvalues))
-    m0_types <- mvalues[mvalues_df[,1],]
-    m1_types <- mvalues[mvalues_df[,2],]
+    m0_types <- mvalues[mvalues_df[,1], , drop = FALSE]
+    m1_types <- mvalues[mvalues_df[,2], , drop = FALSE]
 
     #Determine which rows of m0_types are weakly less than the corresponding row in m1_types
     monotonic_types <- base::sapply(1:NROW(m0_types),
@@ -99,7 +99,7 @@ lb_frac_affected <- function(df,
 
     #Compute the marginal distribution of M among D=1
     p_m_1_fn <- function(mvalue){
-      mdf1 <- mdf[dvec ==1,]
+      mdf1 <- mdf[dvec ==1, , drop = FALSE]
       M_equals_mvalue <- sapply(1:NROW(mdf1), function(i){all(mdf1[i,]==mvalue)} )
       return(stats::weighted.mean( x = M_equals_mvalue,
                                    w = wvec[dvec == 1]/sum(wvec[dvec == 1])))
@@ -109,7 +109,7 @@ lb_frac_affected <- function(df,
 
     #Compute the marginal distribution of M among D=0
     p_m_0_fn <- function(mvalue){
-      mdf0 <- mdf[dvec ==0,]
+      mdf0 <- mdf[dvec ==0, , drop = FALSE]
       M_equals_mvalue <- sapply(1:NROW(mdf0), function(i){all(mdf0[i,]==mvalue)} )
       return(stats::weighted.mean( x = M_equals_mvalue,
                                    w = wvec[dvec == 0]/sum(wvec[dvec == 0])))
