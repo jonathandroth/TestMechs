@@ -14,7 +14,7 @@ Imports:
     ggplot2,
     magrittr,
     purrr,
-    reldist
+    reldist,
     data.table (>= 1.15.4)
 RoxygenNote: 7.3.2
 Suggests: 
