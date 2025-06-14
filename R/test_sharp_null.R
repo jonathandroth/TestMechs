@@ -1,7 +1,7 @@
 #' @title Hypothesis test for the sharp null of full mediation
 #' @description This function tests the sharp null that Y(1,m) = Y(0,m). The
 #'   outcome and mediator are both assumed to take finitely many different
-#'   values. Several options are available for infernece.
+#'   values. Several options are available for inference.
 #' @param df A data frame
 #' @param d Name of the treatment variable in the df
 #' @param m Name of the mediator variable(s)
