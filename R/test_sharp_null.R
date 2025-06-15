@@ -84,7 +84,7 @@ test_sharp_null <- function(df,
 
   ## Make sure lpinfer is installed if method == "FSST"
   if (method == "FSST" & !require(lpinfer)) {
-    stop("You must install pacakge lpinfer to use the FSST method. You can install it by running
+    stop("You must install package lpinfer to use the FSST method. You can install it by running
 devtools::install_github('conroylau/lpinfer')")
   }
   
