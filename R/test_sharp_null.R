@@ -1071,6 +1071,74 @@ get_beta.obs_fn <- function(yvec, dvec, mvec, df, reg_formula, inequalities_only
   return(beta.obs)
 }
 
+#Parse reg_formula to check for IV or covariates
+extract_iv <- function(reg_formula, d){
+  ## ------------------------------------------------------------
+  ## 1. Turn the user’s reg_formula into a character string
+  ## ------------------------------------------------------------
+  reg_str <- if (inherits(reg_formula, "formula")) {
+    paste(deparse(reg_formula), collapse = " ")
+  } else {
+    as.character(reg_formula)
+  }
+  reg_str <- trimws(sub("^~", "", reg_str))          # drop leading "~"
+  
+  ## ------------------------------------------------------------
+  ## 2. Separate the bit before/after the first "|"  (fixed-effects)
+  ## ------------------------------------------------------------
+  split_pipe <- strsplit(reg_str, "\\|", fixed = FALSE)[[1]]
+  rhs_main   <- trimws(split_pipe[1])                 # what we parse
+  rhs_tail   <- if (length(split_pipe) > 1)           # leave FE part intact
+    paste0("|", paste(trimws(split_pipe[-1]), collapse = " | "))
+  else
+    ""
+  
+  ## ------------------------------------------------------------
+  ## 3. Initialise output list
+  ## ------------------------------------------------------------
+  out <- list(is_iv     = FALSE,
+              treat     = d,
+              instr     = character(0),
+              controls  = character(0),
+              rhs_tail  = rhs_tail)
+  
+  ## ------------------------------------------------------------
+  ## 4. Detect IV syntax:  look for "( ... = ... )"
+  ## ------------------------------------------------------------
+  if (grepl("\\([^)]*=[^)]*\\)", rhs_main)) {
+    ## ---- IV branch ------------------------------------------
+    out$is_iv <- TRUE
+    
+    iv_part <- sub(".*\\(([^)]*)\\).*", "\\1", rhs_main)   # inside "( ... )"
+    sides   <- strsplit(iv_part, "=", fixed = TRUE)[[1]]
+    
+    # NB: pattern = "+"  with fixed = TRUE   (no backslash!)
+    out$treat <- trimws( unlist( strsplit(sides[1], "+", fixed = TRUE) ) )
+    out$instr <- trimws( unlist( strsplit(sides[2], "+", fixed = TRUE) ) )
+    
+    # remove the "( ... )" to isolate controls
+    rhs_controls <- gsub("\\([^)]*\\)", "", rhs_main)
+    ctrls_raw    <- trimws( unlist( strsplit(rhs_controls, "+", fixed = TRUE) ) )
+    out$controls <- setdiff(ctrls_raw, c(out$treat, ""))
+    
+  } else {
+    ## ---- OLS branch -----------------------------------------
+    vars <- trimws( unlist( strsplit(rhs_main, "+", fixed = TRUE) ) )
+    vars <- vars[nzchar(vars)]          # drop empties
+    out$controls <- setdiff(vars, d)    # keep treatment out of controls
+  }
+  
+  ## ------------------------------------------------------------
+  ## 5. Sanity check
+  ## ------------------------------------------------------------
+  if (!d %in% c(out$treat, out$controls))
+    stop("Treatment variable '", d,
+         "' not found in reg_formula. Please include it.")
+  
+  out
+}
+
+
 #Function to get the IFs for beta_obs and its subcomponents
 get_IFs <- function(yvec, dvec, mvec, my_values, mvalues = unique(my_values$m),
                     inequalities_only = T, exploit_binary_m = FALSE){
