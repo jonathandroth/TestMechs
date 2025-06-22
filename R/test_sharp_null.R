@@ -966,10 +966,33 @@ construct_Aobs_Ashp_betashp <- function(yvec,
 get_beta.obs_fn <- function(yvec, dvec, mvec, df, reg_formula, inequalities_only,
                             yvalues, mvalues, my_values, rearrange = FALSE) {
   #Get frequencies for all possible values of (y,m) | D=0
-  p_ym_0_vec <- purrr::map_dbl(.x = 1:NROW(my_values),
-                               .f = ~mean(yvec[dvec == 0] == my_values$y[.x]
-                                          & mvec[dvec == 0] == my_values$m[.x]) )
-
+  if(!is.null(reg_formula)){
+    #Use regression approach
+    #Parse reg_formula to check for IV or covariates
+    iv_spec <- extract_iv(reg_formula)
+    p_ym_0_vec <- numeric(nrow(my_values))
+    
+      for (j in 1:nrow(my_values)) {
+        # Create indicator for current (y,m) combo
+        df$lhs <- as.numeric(yvec == my_values$y[j] & mvec == my_values$m[j])
+        # Build formula for fixest
+        if (iv_spec$is_iv) {
+          fml <- as.formula(paste0("lhs ~ ", iv_spec$controls, " | ", iv_spec$treat, " ~ ", iv_spec$instruments))
+        } else {
+          fml <- as.formula(paste0("lhs ~ ", iv_spec$rhs))  # rhs includes "treat + controls"
+        }
+        reg <- fixest::feols(fml, data = df)
+        # Predict under D=0 
+        df_zero <- df; df_zero[[d]] <- 0
+        p_ym_0_vec[j] <- mean(predict(reg, newdata = df_zero))
+      }
+    } else {
+      # Use original frequency approach (randomized D)
+      p_ym_0_vec <- purrr::map_dbl(.x = 1:NROW(my_values),
+                                   .f = ~mean(yvec[dvec == 0] == my_values$y[.x]
+                                              & mvec[dvec == 0] == my_values$m[.x]) )
+      
+    }
   #Rearrange into a matrix where rows correspond to values of y and cols vals of m
   p_ym_d0 <-
     cbind(my_values, p_ym_0_vec) %>%
@@ -979,10 +1002,32 @@ get_beta.obs_fn <- function(yvec, dvec, mvec, df, reg_formula, inequalities_only
 
 
   #Get frequencies for all possible values of (y,m) | D=1
-  p_ym_1_vec <- purrr::map_dbl(.x = 1:NROW(my_values),
-                               .f = ~mean(yvec[dvec == 1] == my_values$y[.x]
-                                          & mvec[dvec == 1] == my_values$m[.x]) )
-
+   if(!is.null(reg_formula)){
+    #Use regression approach
+    #Parse reg_formula to check for IV or covariates
+    iv_spec <- extract_iv(reg_formula)
+    p_ym_0_vec <- numeric(nrow(my_values))
+    
+    for (j in 1:nrow(my_values)) {
+      # Create indicator for current (y,m) combo
+      df$lhs <- as.numeric(yvec == my_values$y[j] & mvec == my_values$m[j])
+      # Build formula for fixest
+      if (iv_spec$is_iv) {
+        fml <- as.formula(paste0("lhs ~ ", iv_spec$controls, " | ", iv_spec$treat, " ~ ", iv_spec$instruments))
+      } else {
+        fml <- as.formula(paste0("lhs ~ ", iv_spec$rhs))  # rhs includes "treat + controls"
+      }
+      reg <- fixest::feols(fml, data = df)
+      # Predict under D=1 
+      df_one <- df; df_one[[d]] <- 1
+      p_ym_1_vec[j] <- mean(predict(reg, newdata = df_one))
+    }
+  } else{
+    # Use original frequency approach (randomized D)
+    p_ym_1_vec <- purrr::map_dbl(.x = 1:NROW(my_values),
+                                 .f = ~mean(yvec[dvec == 1] == my_values$y[.x]
+                                            & mvec[dvec == 1] == my_values$m[.x]) )
+ }
   #Rearrange into a matrix where rows correspond to values of y and cols vals of m
   p_ym_d1 <-
     cbind(my_values, p_ym_1_vec) %>%
