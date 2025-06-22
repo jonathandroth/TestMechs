@@ -208,6 +208,8 @@ devtools::install_github('conroylau/lpinfer')")
   beta.obs <- get_beta.obs_fn(yvec = yvec,
                               dvec = dvec,
                               mvec = mvec,
+                              df = df,
+                              reg_formula = reg_formula,
                               inequalities_only = inequalities_only,
                               yvalues = yvalues,
                               mvalues = mvalues,
@@ -961,7 +963,7 @@ construct_Aobs_Ashp_betashp <- function(yvec,
 
 
 # Constructing beta_obs
-get_beta.obs_fn <- function(yvec, dvec, mvec, inequalities_only,
+get_beta.obs_fn <- function(yvec, dvec, mvec, df, reg_formula, inequalities_only,
                             yvalues, mvalues, my_values, rearrange = FALSE) {
   #Get frequencies for all possible values of (y,m) | D=0
   p_ym_0_vec <- purrr::map_dbl(.x = 1:NROW(my_values),
