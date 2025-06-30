@@ -1140,7 +1140,7 @@ extract_iv <- function(reg_formula, d){
 
 
 #Function to get the IFs for beta_obs and its subcomponents
-get_IFs <- function(yvec, dvec, mvec, my_values, mvalues = unique(my_values$m),
+get_IFs <- function(yvec, dvec, mvec, df, d, reg_formula, my_values, mvalues = unique(my_values$m),
                     inequalities_only = T, exploit_binary_m = FALSE){
   n <- length(yvec)
   n0 <- sum(dvec == 0)
