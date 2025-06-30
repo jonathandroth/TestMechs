@@ -1142,61 +1142,107 @@ extract_iv <- function(reg_formula, d){
 #Function to get the IFs for beta_obs and its subcomponents
 get_IFs <- function(yvec, dvec, mvec, df, d, reg_formula, my_values, mvalues = unique(my_values$m),
                     inequalities_only = T, exploit_binary_m = FALSE){
+  
   n <- length(yvec)
   n0 <- sum(dvec == 0)
   n1 <- sum(dvec == 1)
-
+  
   p_ym_0_noncentered_IFs <- matrix(NA, nrow = n, ncol = NROW(my_values) )
   p_ym_0_centered_IFs <- matrix(NA, nrow = n, ncol = NROW(my_values) )
-
+  
   p_ym_1_noncentered_IFs <- matrix(NA, nrow = n, ncol = NROW(my_values) )
   p_ym_1_centered_IFs <- matrix(NA, nrow = n, ncol = NROW(my_values) )
-
-
-
-  for(i in 1:NROW(my_values)){
-    p_ym_0_indicators <- (yvec == my_values$y[i]) &
-      (mvec == my_values$m[i]) &
-      (dvec == 0)
-
-    p_ym_0_noncentered_IFs[,i] <- p_ym_0_indicators / (n0/n)
-    p_ym_0_centered_IFs[,i] <- (dvec==0) * (p_ym_0_indicators - mean(p_ym_0_noncentered_IFs[,i])) / (n0/n)
-
-    p_ym_1_indicators <- (yvec == my_values$y[i]) &
-      (mvec == my_values$m[i]) &
-      (dvec == 1)
-
-    p_ym_1_noncentered_IFs[,i] <- p_ym_1_indicators / (n1/n)
-    p_ym_1_centered_IFs[,i] <- (dvec==1) * (p_ym_1_indicators - mean(p_ym_1_noncentered_IFs[,i])) / (n1/n)
-
-  }
-
-
-  k <- length(mvalues )
-
+  
+  k <- length(mvalues)
+  
   p_m_0_noncentered_IFs <- matrix(NA, nrow = n, ncol = k )
   p_m_0_centered_IFs <- matrix(NA, nrow = n, ncol = k )
-
+  
   p_m_1_noncentered_IFs <- matrix(NA, nrow = n, ncol = k )
   p_m_1_centered_IFs <- matrix(NA, nrow = n, ncol = k )
 
-
-  for(i in 1:k){
-    p_m_0_indicators <-
-      (mvec == mvalues[i]) &
-      (dvec == 0)
-
-    p_m_0_noncentered_IFs[,i] <- p_m_0_indicators / (n0/n)
-    p_m_0_centered_IFs[,i] <- (dvec==0) * (p_m_0_indicators - mean(p_m_0_noncentered_IFs[,i])) / (n0/n)
-
-    p_m_1_indicators <-
-      (mvec == mvalues[i]) &
-      (dvec == 1)
-
-    p_m_1_noncentered_IFs[,i] <- p_m_1_indicators / (n1/n)
-    p_m_1_centered_IFs[,i] <- (dvec==1) * (p_m_1_indicators - mean(p_m_1_noncentered_IFs[,i])) / (n1/n)
-
+# Randomised design (reg_formula is NULL or trivial)
+  
+  if (is.null(reg_formula) || identical(as.character(reg_formula), "~ treat")){
+    
+    for(i in 1:NROW(my_values)){
+      p_ym_0_indicators <- (yvec == my_values$y[i]) &
+        (mvec == my_values$m[i]) &
+        (dvec == 0)
+      
+      p_ym_0_noncentered_IFs[,i] <- p_ym_0_indicators / (n0/n)
+      p_ym_0_centered_IFs[,i] <- (dvec==0) * (p_ym_0_indicators - mean(p_ym_0_noncentered_IFs[,i])) / (n0/n)
+      
+      p_ym_1_indicators <- (yvec == my_values$y[i]) &
+        (mvec == my_values$m[i]) &
+        (dvec == 1)
+      
+      p_ym_1_noncentered_IFs[,i] <- p_ym_1_indicators / (n1/n)
+      p_ym_1_centered_IFs[,i] <- (dvec==1) * (p_ym_1_indicators - mean(p_ym_1_noncentered_IFs[,i])) / (n1/n)
+    }
+    
+    for(i in 1:k){
+      p_m_0_indicators <-
+        (mvec == mvalues[i]) &
+        (dvec == 0)
+      
+      p_m_0_noncentered_IFs[,i] <- p_m_0_indicators / (n0/n)
+      p_m_0_centered_IFs[,i] <- (dvec==0) * (p_m_0_indicators - mean(p_m_0_noncentered_IFs[,i])) / (n0/n)
+      
+      p_m_1_indicators <-
+        (mvec == mvalues[i]) &
+        (dvec == 1)
+      
+      p_m_1_noncentered_IFs[,i] <- p_m_1_indicators / (n1/n)
+      p_m_1_centered_IFs[,i] <- (dvec==1) * (p_m_1_indicators - mean(p_m_1_noncentered_IFs[,i])) / (n1/n)
+    }
+    
+  } else{
+    # Non_experimental design
+    df0 <- df
+    df0[[d]] <- 0    # all units set to control
+    df1 <- df
+    df1[[d]] <- 1    # all units set to treated
+    
+    for(i in 1:NROW(my_values)){
+      df$lhs <- as.numeric(yvec == my_values$y[i] & mvec == my_values$m[i])
+      
+      # build regression formula 
+      fml <- as.formula(paste("lhs", reg_formula))
+      mod <- fixest::feols(fml, data = df)          
+      S   <- sandwich::estfun(mod)                 # n × k score rows
+      
+      mu0 <- stats::predict(mod, newdata = df0)
+      mu1 <- stats::predict(mod, newdata = df1)
+      p0  <- mean(mu0)
+      p1 <- mean(mu1)
+      
+      X0bar <- colMeans(stats::model.matrix(mod, df0))
+      X1bar <- colMeans(stats::model.matrix(mod, df1))
+      
+      # centered IFs via delta method
+      p_ym_0_centered_IFs[,i] <- (mu0 - p0) + as.numeric(S %*% X0bar)
+      p_ym_1_centered_IFs[,i] <- (mu1 - p1) + as.numeric(S %*% X1bar)
+      
+      # non-centered
+      p_ym_0_noncentered_IFs[,i] <- mu0 / (n0/n)
+      p_ym_1_noncentered_IFs[,i] <- mu1 / (n1/n)
+    }
+    
+    for (i in 1:k){
+      idx <- which(my_values$m == mvalues[i])
+      if(length(idx)){
+        p_m_0_centered_IFs[,i] <- rowSums(p_ym_0_centered_IFs[,idx,drop=FALSE])
+        p_m_1_centered_IFs[,i] <- rowSums(p_ym_1_centered_IFs[,idx,drop=FALSE])
+        p_m_0_noncentered_IFs[,i] <- rowSums(p_ym_0_noncentered_IFs[,idx,drop=FALSE])
+        p_m_1_noncentered_IFs[,i] <- rowSums(p_ym_1_noncentered_IFs[,idx,drop=FALSE])
+      }
+    }
+    
+    
   }
+  
+
 
   if (inequalities_only) {
     #Duplicate the first two sets of rows with opposite signs
@@ -1233,7 +1279,6 @@ get_IFs <- function(yvec, dvec, mvec, df, d, reg_formula, my_values, mvalues = u
                   cbind((p_ym_0_centered_IFs - p_ym_1_centered_IFs)[,1:num_yvals], (p_ym_1_centered_IFs - p_ym_0_centered_IFs)[,(num_yvals+1):(2*num_yvals)])))
   }
 
-
   return(list(beta.obs_noncentered_IFs = beta.obs_noncentered_IFs,
               beta.obs_centered_IFs = beta.obs_centered_IFs,
               p_ym_0_noncentered_IFs = p_ym_0_noncentered_IFs,
@@ -1249,12 +1294,17 @@ get_IFs <- function(yvec, dvec, mvec, df, d, reg_formula, my_values, mvalues = u
 }
 
 analytic_variance <-
-  function(yvec, dvec, mvec, clustervec = seq(from = 1, to = length(yvec)), my_values, mvalues = unique(my_values$m),
-           inequalities_only, exploit_binary_m = FALSE){
+  function(yvec, dvec, mvec, df, d, reg_formula, 
+           clustervec = seq(from = 1, to = length(yvec)), 
+           my_values, mvalues = unique(my_values$m),
+           inequalities_only = TRUE, exploit_binary_m = FALSE){
 
     IFs <- get_IFs(yvec = yvec,
                    dvec = dvec,
                    mvec = mvec,
+                   df = df,
+                   d = d,
+                   reg_formula = reg_formula,
                    my_values = my_values,
                    mvalues = mvalues,
                    inequalities_only = inequalities_only,
