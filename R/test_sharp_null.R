@@ -1140,7 +1140,7 @@ extract_iv <- function(reg_formula, d){
 
 
 #Function to get the IFs for beta_obs and its subcomponents
-get_IFs <- function(yvec, dvec, mvec, df, d, reg_formula, my_values, mvalues = unique(my_values$m),
+get_IFs <- function(yvec, dvec, mvec, df, d, reg_formula = NULL, my_values, mvalues = unique(my_values$m),
                     inequalities_only = T, exploit_binary_m = FALSE){
   
   n <- length(yvec)
@@ -1294,7 +1294,7 @@ get_IFs <- function(yvec, dvec, mvec, df, d, reg_formula, my_values, mvalues = u
 }
 
 analytic_variance <-
-  function(yvec, dvec, mvec, df, d, reg_formula, 
+  function(yvec, dvec, mvec, df, d, reg_formula = NULL, 
            clustervec = seq(from = 1, to = length(yvec)), 
            my_values, mvalues = unique(my_values$m),
            inequalities_only = TRUE, exploit_binary_m = FALSE){
