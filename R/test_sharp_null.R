@@ -1237,14 +1237,54 @@ get_IFs <- function(yvec, dvec, mvec, df, d, reg_formula = NULL, my_values, mval
     df1 <- df
     df1[[d]] <- 1    # all units set to treated
     
-    for(i in 1:NROW(my_values)){
-      df$lhs <- as.numeric(yvec == my_values$y[i] & mvec == my_values$m[i])
+    for(idx in 1:NROW(my_values)){
+      df$lhs <- as.numeric(yvec == my_values$y[idx] & mvec == my_values$m[idx])
       
-      # build regression formula 
-      fml <- as.formula(paste("lhs", reg_formula))
-      mod <- fixest::feols(fml, data = df)          
-      S   <- sandwich::estfun(mod)                 # n × k score rows
+      if (var(df$lhs) == 0) {                        # all-0 or all-1
+        # no regression needed: fitted value is the constant itself
+        mu0 <- df$lhs                                # 0 or 1 everywhere
+        mu1 <- df$lhs
+        p0  <- mean(mu0)                             # = 0 or 1
+        p1  <- p0
+        
+        # centered IFs: (mu – mean)
+        p_ym_0_centered_IFs[, idx] <- mu0 - p0
+        p_ym_1_centered_IFs[, idx] <- mu1 - p1
+        
+        # non-centered (divide by n_d / n to mimic old scaling)
+        p_ym_0_noncentered_IFs[, idx] <- mu0 / (n0 / n)
+        p_ym_1_noncentered_IFs[, idx] <- mu1 / (n1 / n)
+        next                            # proceed to next (y,m) pair
+      }else{
+        iv_spec <- extract_iv(reg_formula, d)
+        if (iv_spec$is_iv) {
+          ctrl  <- paste(iv_spec$controls, collapse = " + ")   
+          instr <- paste(iv_spec$instr,     collapse = " + ")
+          
+          fml <- as.formula(sprintf("lhs ~ %s | %s ~ %s",
+                                    ctrl, iv_spec$treat, instr))
+        } else {
+          rhs <- paste(c(iv_spec$treat, iv_spec$controls), collapse = " + ")
+          fml <- as.formula(paste("lhs ~", rhs))
+        }
+        
+      mod <- fixest::feols(fml, data = df) 
       
+      is_iv <- !is.null(mod$iv_inst)          # TRUE only when IV matrices exist
+      
+      if (is_iv) {
+        Zmat  <- stats::model.matrix(mod, type = "iv.inst")   # n × q instruments
+        Xmat  <- stats::model.matrix(mod, type = "rhs")    # n × p regressors
+        score  <- Zmat * residuals(mod)           # z_i e_i      (n × q)
+        ZtXinv <- solve(crossprod(Zmat, Xmat) / n) # (Z'X/n)^(-1)  (q × p)
+        IF_beta <- score %*% ZtXinv                # n × p
+      } else {
+        Xmat   <- stats::model.matrix(mod)                # n × p
+        score  <- Xmat * residuals(mod)            # x_i e_i      (n × p)
+        XtXinv <- solve(crossprod(Xmat) / n)       # (X'X/n)^(-1)
+        IF_beta <- score %*% XtXinv                # n × p
+      }
+  
       mu0 <- stats::predict(mod, newdata = df0)
       mu1 <- stats::predict(mod, newdata = df1)
       p0  <- mean(mu0)
@@ -1253,14 +1293,17 @@ get_IFs <- function(yvec, dvec, mvec, df, d, reg_formula = NULL, my_values, mval
       X0bar <- colMeans(stats::model.matrix(mod, df0))
       X1bar <- colMeans(stats::model.matrix(mod, df1))
       
-      # centered IFs via delta method
-      p_ym_0_centered_IFs[,i] <- (mu0 - p0) + as.numeric(S %*% X0bar)
-      p_ym_1_centered_IFs[,i] <- (mu1 - p1) + as.numeric(S %*% X1bar)
+
+      # centred IFs via delta-method
+      p_ym_0_centered_IFs[, idx] <- (mu0 - p0) + as.numeric(IF_beta %*% X0bar)
+      p_ym_1_centered_IFs[, idx] <- (mu1 - p1) + as.numeric(IF_beta %*% X1bar)
+      
       
       # non-centered
-      p_ym_0_noncentered_IFs[,i] <- mu0 / (n0/n)
-      p_ym_1_noncentered_IFs[,i] <- mu1 / (n1/n)
-    }
+      p_ym_0_noncentered_IFs[,idx] <- mu0 / (n0/n)
+      p_ym_1_noncentered_IFs[,idx] <- mu1 / (n1/n)
+      }
+      }
     
     for (i in 1:k){
       idx <- which(my_values$m == mvalues[i])
@@ -1271,11 +1314,8 @@ get_IFs <- function(yvec, dvec, mvec, df, d, reg_formula = NULL, my_values, mval
         p_m_1_noncentered_IFs[,i] <- rowSums(p_ym_1_noncentered_IFs[,idx,drop=FALSE])
       }
     }
-    
-    
   }
   
-
 
   if (inequalities_only) {
     #Duplicate the first two sets of rows with opposite signs
