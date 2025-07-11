@@ -210,6 +210,7 @@ devtools::install_github('conroylau/lpinfer')")
                               dvec = dvec,
                               mvec = mvec,
                               df = df,
+                              d = d,
                               reg_formula = reg_formula,
                               inequalities_only = inequalities_only,
                               yvalues = yvalues,
@@ -225,6 +226,9 @@ devtools::install_github('conroylau/lpinfer')")
           yvec = df[[y]],
           dvec = df[[d]],
           mvec = df[[m]],
+          df = df,
+          d = d,
+          reg_formula = reg_formula,
           inequalities_only = inequalities_only,
           yvalues = yvalues,
           mvalues = mvalues,
@@ -245,6 +249,9 @@ devtools::install_github('conroylau/lpinfer')")
     sigma.obs <- analytic_variance(yvec = yvec,
                                    dvec = dvec,
                                    mvec = mvec,
+                                   df = df,
+                                   d = d,
+                                   reg_formula = reg_formula,
                                    my_values = my_values,
                                    inequalities_only = inequalities_only,
                                    clustervec = clustervec)
@@ -964,29 +971,41 @@ construct_Aobs_Ashp_betashp <- function(yvec,
 
 
 # Constructing beta_obs
-get_beta.obs_fn <- function(yvec, dvec, mvec, df, reg_formula, inequalities_only,
+get_beta.obs_fn <- function(yvec, dvec, mvec, df, d, reg_formula = NULL, inequalities_only,
                             yvalues, mvalues, my_values, rearrange = FALSE) {
   #Get frequencies for all possible values of (y,m) | D=0
   if(!is.null(reg_formula)){
     #Use regression approach
     #Parse reg_formula to check for IV or covariates
-    iv_spec <- extract_iv(reg_formula)
+    iv_spec <- extract_iv(reg_formula, d)
     p_ym_0_vec <- numeric(nrow(my_values))
     
       for (j in 1:nrow(my_values)) {
         # Create indicator for current (y,m) combo
         df$lhs <- as.numeric(yvec == my_values$y[j] & mvec == my_values$m[j])
-        # Build formula for fixest
-        if (iv_spec$is_iv) {
-          fml <- as.formula(paste0("lhs ~ ", iv_spec$controls, " | ", iv_spec$treat, " ~ ", iv_spec$instruments))
-        } else {
-          fml <- as.formula(paste0("lhs ~ ", iv_spec$rhs))  # rhs includes "treat + controls"
-        }
-        reg <- fixest::feols(fml, data = df)
-        # Predict under D=0 
-        df_zero <- df; df_zero[[d]] <- 0
-        p_ym_0_vec[j] <- mean(predict(reg, newdata = df_zero))
+
+       if (var(df$lhs) == 0) {                    # all-0 or all-1
+        p_ym_0_vec[j] <- df$lhs[1]               # 0 or 1; no regression
+        next                                      # move to next (y,m)
+      }else{
+      if (iv_spec$is_iv) {
+        ctrl  <- paste(iv_spec$controls, collapse = " + ")   
+        instr <- paste(iv_spec$instr,     collapse = " + ")
+        
+        fml <- as.formula(sprintf("lhs ~ %s | %s ~ %s",
+                                  ctrl, iv_spec$treat, instr))
+      } else {
+        rhs <- paste(c(iv_spec$treat, iv_spec$controls), collapse = " + ")
+        fml <- as.formula(paste("lhs ~", rhs))
       }
+      # estimate & predict
+      reg <- fixest::feols(fml, data = df)
+      # Predict under D=0 
+      df_zero <- df
+      df_zero[[d]] <- 0
+      p_ym_0_vec[j] <- mean(predict(reg, newdata = df_zero))
+    }
+  }
     } else {
       # Use original frequency approach (randomized D)
       p_ym_0_vec <- purrr::map_dbl(.x = 1:NROW(my_values),
@@ -1006,23 +1025,36 @@ get_beta.obs_fn <- function(yvec, dvec, mvec, df, reg_formula, inequalities_only
    if(!is.null(reg_formula)){
     #Use regression approach
     #Parse reg_formula to check for IV or covariates
-    iv_spec <- extract_iv(reg_formula)
-    p_ym_0_vec <- numeric(nrow(my_values))
+    iv_spec <- extract_iv(reg_formula, d)
+    p_ym_1_vec <- numeric(nrow(my_values))
     
     for (j in 1:nrow(my_values)) {
       # Create indicator for current (y,m) combo
       df$lhs <- as.numeric(yvec == my_values$y[j] & mvec == my_values$m[j])
-      # Build formula for fixest
-      if (iv_spec$is_iv) {
-        fml <- as.formula(paste0("lhs ~ ", iv_spec$controls, " | ", iv_spec$treat, " ~ ", iv_spec$instruments))
-      } else {
-        fml <- as.formula(paste0("lhs ~ ", iv_spec$rhs))  # rhs includes "treat + controls"
-      }
-      reg <- fixest::feols(fml, data = df)
+
+      if (var(df$lhs) == 0) {                    # all-0 or all-1
+        p_ym_0_vec[j] <- df$lhs[1]               # 0 or 1; no regression
+        next                                      # move to next (y,m)
+      }else{
+        if (iv_spec$is_iv) {
+          ctrl  <- paste(iv_spec$controls, collapse = " + ")   
+          instr <- paste(iv_spec$instr,     collapse = " + ")
+          
+          fml <- as.formula(sprintf("lhs ~ %s | %s ~ %s",
+                                    ctrl, iv_spec$treat, instr))
+        } else {
+          rhs <- paste(c(iv_spec$treat, iv_spec$controls), collapse = " + ")
+          fml <- as.formula(paste("lhs ~", rhs))
+        }
+        # estimate & predict
+        reg <- fixest::feols(fml, data = df)
+
       # Predict under D=1 
-      df_one <- df; df_one[[d]] <- 1
+      df_one <- df
+      df_one[[d]] <- 1
       p_ym_1_vec[j] <- mean(predict(reg, newdata = df_one))
     }
+  }
   } else{
     # Use original frequency approach (randomized D)
     p_ym_1_vec <- purrr::map_dbl(.x = 1:NROW(my_values),
