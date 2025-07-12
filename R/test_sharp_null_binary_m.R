@@ -16,6 +16,7 @@
 #'   ordering is used.
 #' @param B Bootstrap size, default is zero
 #' @param cluster Cluster for bootstrap
+#' @param reg_formula Regression formula for the non-experimental setting
 #' @param weight.matrix Weight matrix used to implement FSST. Possible options
 #'   are "diag", "avar", "identity." Defaults is "diag" as in FSST.
 #'  @param num_Ybins (Optional) If specified, Y is discretized into the given number of bins (if num_Ybins is larger than the number of unique values of Y, no changes are made)
@@ -34,6 +35,7 @@ test_sharp_null_binary_m <- function(df,
                                      ordering = NULL,
                                      B = 500,
                                      cluster = NULL,
+                                     reg_formula = NULL,
                                      weight.matrix = "diag",
                                      ats_only = F,
                                      alpha = 0.05,
@@ -86,28 +88,168 @@ test_sharp_null_binary_m <- function(df,
   
   
   ## Define function for beta.obs
-  get_beta.obs <- function(yvec, dvec, mvec) {
+  get_beta.obs <- function(yvec, dvec, mvec, df, d, yvalues, reg_formula) {
     #Get partial density for Y,M=1|D=1
+    # randomized case
+    if(is.null(reg_formula)){
     p_y1_1 <- purrr::map_dbl(.x = 1:length(yvalues),
                              .f = ~mean(yvec[dvec == 1] == yvalues[.x]
                                         & mvec[dvec == 1] == 1 ))
-    
+    } else{
+      # non-experimental case
+      iv_spec <- extract_iv(reg_formula, d)
+      p_y1_1 <- numeric(length(yvalues))
+      
+      for(j in 1:length(yvalues)){
+        df$lhs <- as.numeric(yvec ==yvalues[j] & mvec == 1)
+        if (var(df$lhs) == 0) {                           # all-0 or all-1 case
+          p_y1_1[j] <- df$lhs[1]                          # 0 or 1, no regression
+          next
+        }
+        if (iv_spec$is_iv) {
+          # IV syntax: lhs ~ controls | treat ~ instruments
+          ctrl  <- paste(iv_spec$controls, collapse = " + ")
+          instr <- paste(iv_spec$instr,     collapse = " + ")
+          fml   <- as.formula(sprintf("lhs ~ %s | %s ~ %s",
+                                      ctrl, iv_spec$treat, instr))
+        } else {
+          # OLS: lhs ~ treat + controls
+          rhs   <- paste(c(iv_spec$treat, iv_spec$controls), collapse = " + ")
+          fml   <- as.formula(paste("lhs ~", rhs))
+        }
+        
+        reg_vars <- c(d, m, y, iv_spec$controls, iv_spec$instr, cluster)
+        df_clean <- df %>% tidyr::drop_na(all_of(reg_vars))
+        
+        reg <- fixest::feols(fml, data = df_clean)
+        
+        df_one    <- df_clean               # counter-factual D = 1
+        df_one[[d]] <- 1
+        
+        p_y1_1[j] <- mean(predict(reg, newdata = df_one))
+      }
+    }
     #Get partial density for Y,M=1|D=0
-    p_y1_0 <- purrr::map_dbl(.x = 1:length(yvalues),
-                             .f = ~mean(yvec[dvec == 0] == yvalues[.x]
-                                        & mvec[dvec == 0] == 1 ))
-    
+    if(is.null(reg_formula)){
+      p_y1_0 <- purrr::map_dbl(.x = 1:length(yvalues),
+                               .f = ~mean(yvec[dvec == 0] == yvalues[.x]
+                                          & mvec[dvec == 0] == 1 ))
+    } else{
+      iv_spec  <- extract_iv(reg_formula, d)
+      p_y1_0   <- numeric(length(yvalues))
+      
+      for (j in 1:length(yvalues)) {
+        df$lhs <- as.numeric(yvec == yvalues[j] & mvec == 1)
+        
+        if (var(df$lhs) == 0) {              # degenerate (all-0 or all-1)
+          p_y1_0[j] <- df$lhs[1]             # 0 or 1, no regression
+          next
+        }
+        
+        if (iv_spec$is_iv) {
+          ctrl  <- paste(iv_spec$controls, collapse = " + ")
+          instr <- paste(iv_spec$instr,     collapse = " + ")
+          fml   <- as.formula(sprintf("lhs ~ %s | %s ~ %s",
+                                      ctrl, iv_spec$treat, instr))
+        } else {
+          rhs   <- paste(c(iv_spec$treat, iv_spec$controls), collapse = " + ")
+          fml   <- as.formula(paste("lhs ~", rhs))
+        }
+        
+        reg_vars <- c(d, m, y, iv_spec$controls, iv_spec$instr, cluster)
+        df_clean <- df %>% tidyr::drop_na(all_of(reg_vars))
+        
+        reg <- fixest::feols(fml, data = df_clean)
+        
+        df_zero    <- df_clean
+        df_zero[[d]] <- 0                    # set every unit to control
+        
+        p_y1_0[j]  <- mean(predict(reg, newdata = df_zero))
+      }
+    }
+
     if(!ats_only){
+      
       #Get partial density for Y,M=0|D=1
-      p_y0_1 <- purrr::map_dbl(.x = 1:length(yvalues),
-                               .f = ~mean(yvec[dvec == 1] == yvalues[.x]
-                                          & mvec[dvec == 1] == 0 ))
+      if (is.null(reg_formula)){
+        p_y0_1 <- purrr::map_dbl(.x = 1:length(yvalues),
+                                 .f = ~mean(yvec[dvec == 1] == yvalues[.x]
+                                            & mvec[dvec == 1] == 0 ))
+      } else{
+        iv_spec  <- extract_iv(reg_formula, d)
+        p_y0_1   <- numeric(length(yvalues))
+        
+        for (j in 1:length(yvalues)) {
+          
+          df$lhs <- as.numeric(yvec == yvalues[j] & mvec == 0)
+          
+          if (var(df$lhs) == 0) {              # degenerate (all-0 or all-1)
+            p_y0_1[j] <- df$lhs[1]             # 0 or 1, no regression
+            next
+          }
+          
+          if (iv_spec$is_iv) {
+            ctrl  <- paste(iv_spec$controls, collapse = " + ")
+            instr <- paste(iv_spec$instr,     collapse = " + ")
+            fml   <- as.formula(sprintf("lhs ~ %s | %s ~ %s",
+                                        ctrl, iv_spec$treat, instr))
+          } else {
+            rhs   <- paste(c(iv_spec$treat, iv_spec$controls), collapse = " + ")
+            fml   <- as.formula(paste("lhs ~", rhs))
+          }
+          
+          reg_vars <- c(d, m, y, iv_spec$controls, iv_spec$instr, cluster)
+          df_clean <- df %>% tidyr::drop_na(all_of(reg_vars))
+          
+          reg       <- fixest::feols(fml, data = df_clean)
+          
+          df_one     <- df_clean
+          df_one[[d]] <- 1                     # set every unit to treated
+          
+          p_y0_1[j]  <- mean(predict(reg, newdata = df_one))
+        }
+      }
       
       #Get partial density for Y,M=0|D=0
-      p_y0_0 <- purrr::map_dbl(.x = 1:length(yvalues),
-                               .f = ~mean(yvec[dvec == 0] == yvalues[.x]
-                                          & mvec[dvec == 0] == 0 ))
-      
+      if(is.null(reg_formula)){
+        p_y0_0 <- purrr::map_dbl(.x = 1:length(yvalues),
+                                 .f = ~mean(yvec[dvec == 0] == yvalues[.x]
+                                            & mvec[dvec == 0] == 0 ))
+      } else{
+        iv_spec  <- extract_iv(reg_formula, d)
+        p_y0_0   <- numeric(length(yvalues))
+        
+        for (j in 1:length(yvalues)) {
+          
+          df$lhs <- as.numeric(yvec == yvalues[j] & mvec == 0)
+          
+          if (var(df$lhs) == 0) {              # degenerate (all-0 or all-1)
+            p_y0_0[j] <- df$lhs[1]             # 0 or 1, no regression
+            next
+          }
+          
+          if (iv_spec$is_iv) {
+            ctrl  <- paste(iv_spec$controls, collapse = " + ")
+            instr <- paste(iv_spec$instr,     collapse = " + ")
+            fml   <- as.formula(sprintf("lhs ~ %s | %s ~ %s",
+                                        ctrl, iv_spec$treat, instr))
+          } else {
+            rhs   <- paste(c(iv_spec$treat, iv_spec$controls), collapse = " + ")
+            fml   <- as.formula(paste("lhs ~", rhs))
+          }
+          
+          reg_vars <- c(d, m, y, iv_spec$controls, iv_spec$instr, cluster)
+          df_clean <- df %>% tidyr::drop_na(all_of(reg_vars))
+          
+          reg   <- fixest::feols(fml, data = df_clean)
+          
+          df_zero     <- df_clean
+          df_zero[[d]] <- 0                     # set every unit to control
+          
+          p_y0_0[j]   <- mean(predict(reg, newdata = df_zero))
+        }
+      }
+    
     }
     #We return differences in partial densities that should be positive
     if(ats_only){
@@ -126,7 +268,11 @@ test_sharp_null_binary_m <- function(df,
                                                        function(df,d,y,m,...){get_beta.obs(
                                                          df[[y]],
                                                          df[[d]],
-                                                         df[[m]])},
+                                                         df[[m]],
+                                                         df,
+                                                         d,
+                                                         yvalues,
+                                                         reg_formula = reg_formula)},
                                                      df = df,
                                                      d = d,
                                                      m = m,
@@ -137,7 +283,7 @@ test_sharp_null_binary_m <- function(df,
                                                      return_df = F)
   
   ## Get beta.obs using actual data
-  beta.obs <- get_beta.obs(yvec, dvec, mvec)
+  beta.obs <- get_beta.obs(yvec, dvec, mvec, df, d, yvalues, reg_formula)
   
   
   ## Get analytic variance for arp and cs
@@ -148,6 +294,9 @@ test_sharp_null_binary_m <- function(df,
       sigma.obs <- analytic_variance(yvec = yvec,
                                      dvec = dvec,
                                      mvec = mvec,
+                                     df = df,
+                                     d = d,
+                                     reg_formula = reg_formula,
                                      my_values = my_values,
                                      inequalities_only = TRUE,
                                      clustervec = clustervec,
@@ -159,8 +308,7 @@ test_sharp_null_binary_m <- function(df,
         print(sigma.obs)
         print(sigma.obs_boot)
       }
-    }
-    else {
+    } else {
       sigma.obs <- stats::cov(base::Reduce(base::rbind,
                                            beta.obs_list))
     }
@@ -199,9 +347,7 @@ test_sharp_null_binary_m <- function(df,
                                  weight.matrix = weight.matrix, lambda = lambda)
     
     return(list(result = fsst_result, reject = (fsst_result$pval[1, 2] < alpha)))
-  }
-  
-  else if (method == "ARP") {
+  } else if (method == "ARP") {
     if(use_hybrid){
       lf_cv <- HonestDiD:::.compute_least_favorable_cv(X_T = matrix(0,nrow = length(beta.obs)),
                                                        sigma = sigma.obs,
@@ -228,9 +374,7 @@ test_sharp_null_binary_m <- function(df,
       
     }
     return(arp)
-  }
-  
-  else if (method == "CS") {
+  } else if (method == "CS") {
     #Run Cox and Shi test
     coxandshi <- cox_shi_nonuisance(Y = -beta.obs,
                                     sigma = sigma.obs,
