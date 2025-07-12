@@ -102,6 +102,7 @@ devtools::install_github('conroylau/lpinfer')")
                                          m,
                                          y,
                                          method = method,
+                                         reg_formula = reg_formula,
                                          ordering = ordering,
                                          B = B,
                                          cluster = cluster,
