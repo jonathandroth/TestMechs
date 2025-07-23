@@ -61,6 +61,11 @@ lb_frac_affected <- function(df,
     df[[y]] <- yvec
   }
 
+  # reg_formula only for discrete Y
+  if (continuous_Y && !is.null(reg_formula)){
+    stop("reg_formula is only allowed when Y is discrete (continuous_Y = FALSE).")
+  }
+
   dvec <- df[[d]]
   mdf <- df[,m, drop = FALSE]
 
