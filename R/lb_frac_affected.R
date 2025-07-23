@@ -11,6 +11,7 @@
 #' @param y Name of the outcome variable
 #' @param w (Optional) Name of weighting variable. If null, equal weights are
 #'   used
+#' @param reg_formula (Optional) Regression formula. The default is null.
 #' @param at_group (Optional) Value of m specifying which always-takers to
 #'   compute lower bounds of TV for.  If at_group is specified, then we compute
 #'   a lower bound on TV between Y(1,at_group) and Y(0,at_group) for ATs who
