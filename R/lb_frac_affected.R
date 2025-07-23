@@ -75,11 +75,26 @@ lb_frac_affected <- function(df,
     wvec <- df[[w]]
   }
 
+  if(is.null(reg_formula) || identical(as.character(reg_formula), "~ treat") || continuous_Y){
   max_p_diffs_list <- compute_max_p_difference(dvec = dvec,
                                                mdf = mdf,
                                                yvec = yvec,
                                                wvec=wvec,
                                                continuous_Y = continuous_Y)
+  }else{
+    max_p_diffs_list <- compute_max_p_difference_reg(
+      dvec = dvec,
+      mdf = mdf,
+      yvec = yvec,
+      wvec = wvec,
+      continuous_Y = continuous_Y,
+      df = df,
+      d = d,
+      y = y,
+      reg_formula = reg_formula
+    )
+  }
+
   max_p_diffs <- max_p_diffs_list$max_p_diffs
   mvalues <- max_p_diffs_list$mvalues
 
