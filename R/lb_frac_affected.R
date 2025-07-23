@@ -489,6 +489,124 @@ compute_max_p_difference <- function(dvec, mdf, yvec, wvec=NULL,
 }
 
 
+# Regression-adjusted max p-differences for discrete Y
+compute_max_p_difference_reg <- function(dvec, mdf, yvec, wvec = NULL,
+                                         continuous_Y = TRUE,
+                                         df, d, y, reg_formula, ...) {
+  
+
+  # unique Y and M values
+  yvalues <- sort(unique(yvec))
+  mvalues <- unique(mdf)
+  if (!is.data.frame(mvalues)) mvalues <- as.data.frame(mvalues)
+  mvalues <- unique(mvalues)
+  
+  # parse formula 
+  iv_spec <- extract_iv(reg_formula, d)
+  
+  # convenience function to test row equality for mediator patterns
+  mediator_row_equal <- function(mdf, pattern_row){
+    # pattern_row is 1-row data.frame
+    apply(mdf, 1, function(r) all(r == unlist(pattern_row)))
+  }
+  
+  # prepare container
+  max_p_diffs <- numeric(nrow(mvalues))
+  
+  for (mi in seq_len(nrow(mvalues))) {
+    
+    m_row  <- mvalues[mi, , drop = FALSE]
+    m_match <- mediator_row_equal(mdf, m_row)
+    
+    # vectors to store partial pmfs for each y
+    p1_vec <- numeric(length(yvalues))
+    p0_vec <- numeric(length(yvalues))
+    
+    for (yj in seq_along(yvalues)) {
+      y_val <- yvalues[yj]
+      
+      # indicator for joint event {Y = y_val, M = m_row}
+      df$lhs <- as.integer(yvec == y_val & m_match)
+      
+      # degenerate case: all 0 or all 1
+      if (var(df$lhs) == 0) {
+        const <- df$lhs[1]
+        p1_vec[yj] <- const
+        p0_vec[yj] <- const
+        next
+      }
+      
+      # build fixest formula
+      if (iv_spec$is_iv) {
+        ctrl  <- paste(iv_spec$controls, collapse = " + ")
+        instr <- paste(iv_spec$instr,     collapse = " + ")
+        fml   <- as.formula(sprintf("lhs ~ %s | %s ~ %s",
+                                    ctrl,
+                                    paste(iv_spec$treat, collapse = "+"),
+                                    instr))
+      } else {
+        rhs <- paste(c(iv_spec$treat, iv_spec$controls), collapse = " + ")
+        fml <- as.formula(paste("lhs ~", rhs))
+      }
+      
+      # vars needed for estimation (drop NAs)
+      needed <- c("lhs", d, iv_spec$controls,
+                  if (iv_spec$is_iv) iv_spec$instr else NULL)
+      needed <- unique(needed[nzchar(needed)])
+      
+      df_fit <- tidyr::drop_na(df[, needed, drop = FALSE])
+      if (nrow(df_fit) == 0) {
+        # if everything was NA after drop, fallback to zero
+        p1_vec[yj] <- 0
+        p0_vec[yj] <- 0
+        next
+      }
+      
+      # fit model
+      mod <- fixest::feols(fml, data = df_fit)
+      
+      # counterfactual datasets
+      df_one        <- df_fit
+      df_one[[d]]   <- 1
+      df_zero       <- df_fit
+      df_zero[[d]]  <- 0
+      
+      pred1 <- predict(mod, newdata = df_one)
+      pred0 <- predict(mod, newdata = df_zero)
+      
+      # weights among df_fit rows
+      # map original wvec to df_fit rows by rownames if needed
+      if (!is.null(rownames(df_fit))) {
+        w_fit <- wvec[as.integer(rownames(df_fit))]
+      } else {
+        # assume the order didn't change (safe if you didn't subset with rownames)
+        w_fit <- wvec[match(1:nrow(df_fit), 1:length(wvec))]
+      }
+      # normalize
+      w_fit <- w_fit / sum(w_fit, na.rm = TRUE)
+      
+      p1_vec[yj] <- weighted.mean(pred1, w_fit, na.rm = TRUE)
+      p0_vec[yj] <- weighted.mean(pred0, w_fit, na.rm = TRUE)
+    }
+    
+    # Partial PMFs: p_m_d * pmf_y_d
+    # We need P(M=m_row | D=d). Under regression adjustment, we mimic
+    # what compute_max_p_difference() does: use weighted means of m_match
+    p_m_1 <- stats::weighted.mean(m_match[dvec == 1], wvec[dvec == 1])
+    p_m_0 <- stats::weighted.mean(m_match[dvec == 0], wvec[dvec == 0])
+    
+    partial_pmf_1 <- p_m_1 * p1_vec
+    partial_pmf_0 <- p_m_0 * p0_vec
+    
+    max_p_diffs[mi] <- sum(pmax(partial_pmf_1 - partial_pmf_0, 0))
+  }
+  
+  list(mvalues = as.matrix(mvalues),
+       max_p_diffs = max_p_diffs)
+}
+
+
+
 #' @export
 #' @title Finds the minimum number of defiers compatible with the sharp null
 #'@description This function finds the minimum value of max_defiers_share such that compute_tv_ats_multiple_m returns zero
