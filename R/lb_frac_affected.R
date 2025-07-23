@@ -606,6 +606,51 @@ compute_max_p_difference_reg <- function(dvec, mdf, yvec, wvec = NULL,
 }
 
 
+# parse OLS/IV regression formula for fixest
+extract_iv <- function(reg_formula, d){
+  reg_str <- if (inherits(reg_formula, "formula")) {
+    paste(deparse(reg_formula), collapse = " ")
+  } else {
+    as.character(reg_formula)
+  }
+  reg_str <- trimws(sub("^~", "", reg_str))  # drop leading "~"
+  
+  # split by pipe if user left FE / etc (we ignore tail)
+  split_pipe <- strsplit(reg_str, "\\|", fixed = FALSE)[[1]]
+  rhs_main   <- trimws(split_pipe[1])
+  # tail is ignored for now but preserved if you want FE later
+  # rhs_tail <- if (length(split_pipe) > 1) paste0("|", paste(trimws(split_pipe[-1]), collapse = " | ")) else ""
+  
+  out <- list(is_iv    = FALSE,
+              treat    = d,
+              instr    = character(0),
+              controls = character(0))
+  
+  # detect "( ... = ... )"
+  if (grepl("\\([^)]*=[^)]*\\)", rhs_main)) {
+    out$is_iv <- TRUE
+    iv_part <- sub(".*\\(([^)]*)\\).*", "\\1", rhs_main)
+    sides   <- strsplit(iv_part, "=", fixed = TRUE)[[1]]
+    out$treat <- trimws(unlist(strsplit(sides[1], "+", fixed = TRUE)))
+    out$instr <- trimws(unlist(strsplit(sides[2], "+", fixed = TRUE)))
+    
+    rhs_controls <- gsub("\\([^)]*\\)", "", rhs_main)
+    ctrls_raw    <- trimws(unlist(strsplit(rhs_controls, "+", fixed = TRUE)))
+    out$controls <- setdiff(ctrls_raw, c(out$treat, ""))
+    
+  } else {
+    vars <- trimws(unlist(strsplit(rhs_main, "+", fixed = TRUE)))
+    vars <- vars[nzchar(vars)]
+    out$controls <- setdiff(vars, d)
+  }
+  
+  if (!d %in% c(out$treat, out$controls)) {
+    stop("Treatment variable '", d, "' not found in reg_formula. Please include it.")
+  }
+  out
+}
+
+
 
 #' @export
 #' @title Finds the minimum number of defiers compatible with the sharp null
