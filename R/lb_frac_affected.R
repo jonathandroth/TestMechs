@@ -63,8 +63,7 @@ lb_frac_affected <- function(df,
 
   # reg_formula only for discrete Y
   if (!is.null(reg_formula) && continuous_Y) {
-  warning("reg_formula is only allowed when Y is discrete; ignoring reg_formula and proceeding with the randomized estimator.")
-  reg_formula <- NULL
+  stop("reg_formula is only allowed when Y is discrete; ignoring reg_formula and proceeding with the randomized estimator.")
   }
 
   dvec <- df[[d]]
