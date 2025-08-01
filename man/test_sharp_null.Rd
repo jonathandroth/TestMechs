@@ -26,7 +26,8 @@ test_sharp_null(
   analytic_variance = ifelse(method == "FSST", FALSE, TRUE),
   max_defiers_share = 0,
   new_dof_CS = FALSE,
-  use_binary = NULL
+  use_binary = NULL,
+  frac_ATs_affected = NULL
 )
 }
 \arguments{
@@ -74,6 +75,8 @@ support}
 \item{new_dof_CS}{Use the new degrees of freedom formula for Cox and Shi? Default is FALSE.}
 
 \item{use_binary}{If TRUE, uses ARP and CS implementation that exploits the fact that there are no nuisance parameters when the mediator is binary}
+
+\item{frac_ATs_affected}{Relaxes the sharp null to test (sum theta_kk nu_k)/sum theta_kk <= frac_ATs_affected. Default is NULL which corresponds to the sharp null.}
 }
 \description{
 This function tests the sharp null that Y(1,m) = Y(0,m). The
