@@ -25,6 +25,7 @@
 #' @param max_defiers_share Bound on the proportion of defiers in the population. Default is 0 which indicates that the monotonicity constraint is imposed.
 #' @param new_dof_CS Use the new degrees of freedom formula for Cox and Shi? Default is FALSE.
 #' @param use_binary If TRUE, uses ARP and CS implementation that exploits the fact that there are no nuisance parameters when the mediator is binary
+#' @param frac_ATs_affected Relaxes the sharp null to test (sum theta_kk nu_k)/sum theta_kk <= frac_ATs_affected. Default is NULL which corresponds to the sharp null.
 #' @export
 #'
 test_sharp_null <- function(df,
@@ -48,7 +49,8 @@ test_sharp_null <- function(df,
                             analytic_variance = ifelse(method == "FSST", FALSE, TRUE),
                             max_defiers_share = 0,
                             new_dof_CS = FALSE,
-                            use_binary = NULL){
+                            use_binary = NULL,
+                            frac_ATs_affected = NULL){
  
   ## Process the inputted df ----  
   # Remove missing values
@@ -72,7 +74,7 @@ test_sharp_null <- function(df,
   }
 
   ## Set frac_ATs_affected to NULL for now, will allow for other values later on
-  frac_ATs_affected <- NULL
+  ## frac_ATs_affected <- NULL
   
   ## Do not run the binary test when frac_ATs_affected is not null, since we want to test for the fraction of always-takers
   if (!is.null(frac_ATs_affected) | !(max_defiers_share == 0)) {
