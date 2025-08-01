@@ -47,8 +47,8 @@ partial_density_plot <- function(df,
     # Note that D=1 after flipping corresponds to the original D=0
     # and likewise for M
     if(density_1_label == "f(Y,M=1|D=1)" & density_0_label == "f(Y,M=1|D=0)"){
-      density_1_label <- "f(Y,M=0|D=0)"
-      density_0_label <- "f(Y,M=0|D=1)"
+      density_1_label <- "f(Y,M=0|D=1)"
+      density_0_label <- "f(Y,M=0|D=0)"
     }else{
       #If custom labels are given, flip which one corresponds to D=1 and D=0
       density_1_label_old <- density_1_label
