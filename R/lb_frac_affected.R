@@ -19,7 +19,7 @@
 #'   lower bound on the weighted average of TV across all always-takers, with
 #'   weights proportional to shares in population
 #' @param continuous_Y (Optional) Whether Y should be treated as continuous, in
-#'   which case kernel density is used, or discrete. Default is TRUE.
+#'   which case kernel density is used, or discrete. Default is FALSE.
 #' @param num_Ybins (Optional) If specified, Y is discretized into the given
 #'   number of bins (if num_Ybins is larger than the number of unique values of
 #'   Y, no changes are made)
@@ -41,7 +41,7 @@ lb_frac_affected <- function(df,
                              at_group = NULL,
                              w = NULL,
                              reg_formula = NULL,
-                             continuous_Y = base::ifelse(is.null(num_Ybins),TRUE,FALSE),
+                             continuous_Y = FALSE,
                              num_Ybins = NULL,
                              max_defiers_share = 0,
                              allow_min_defiers = FALSE,
@@ -56,9 +56,21 @@ lb_frac_affected <- function(df,
 
   yvec <- df[[y]]
 
+
+  #Discretize y if needed
   if(!is.null(num_Ybins)){
     yvec <- discretize_y(yvec = yvec, numBins = num_Ybins)
     df[[y]] <- yvec
+  } else {
+    continuous_y_flag <- n / length(unique(yvec)) <= 30
+    if (!continuous_Y && continuous_y_flag) {
+      message("continous_Y is set to FALSE but the outcome appears to be continuous. We are discretizing using 5 bins. 
+              You can change the number of bins by setting the num_Ybins argument, or specify continuous_Y = TRUE to 
+              use kernel density estimates tailored for continuous variables." )
+      num_Ybins <- 5
+      yvec <- discretize_y(yvec = yvec, numBins = num_Ybins)
+      df[[y]] <- yvec
+    }
   }
 
   # reg_formula only for discrete Y
