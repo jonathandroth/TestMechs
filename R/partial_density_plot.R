@@ -9,6 +9,7 @@
 #' @param density_1_label (Optional) The label on the plot for the d=1 density.
 #' @param density_0_label (Optional) The label on the plot for the d=0 density.
 #' @param continuous_Y (Optional) Should Y be treated as continuous for density estimation. Default is TRUE. Use FALSE for discrete Y
+#' @param reg_formula (Optional) Regression formula for observational adjustment  
 #' @param num_Ybins (Optional) If specified, Y is discretized into the given number of bins (if num_Ybins is larger than the number of unique values of Y, no changes are made)
 #' @return A ggplot object showing partial densities
 #' @importFrom ggplot2 ggplot
