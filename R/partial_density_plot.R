@@ -84,7 +84,8 @@ df[[y]] <- yvec
                                                                        m = m,
                                                                        y = y,
                                                                        n = numGridPoints,
-                                                                       continuous_Y = continuous_Y)
+                                                                       continuous_Y = continuous_Y,
+                                                                       reg_formula = reg_formula)
 
 
   if(continuous_Y == TRUE){
