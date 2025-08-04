@@ -68,6 +68,7 @@ partial_density_plot <- function(df,
                            density_1_label = density_1_label,
                            density_0_label = density_0_label,
                            num_Ybins = num_Ybins,
+                           reg_formula = reg_formula,
                            continuous_Y = continuous_Y))
   }
 
