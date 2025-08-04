@@ -30,6 +30,7 @@ partial_density_plot <- function(df,
                                  density_1_label = "f(Y,M=1|D=1)",
                                  density_0_label = "f(Y,M=1|D=0)",
                                  num_Ybins = NULL,
+                                 reg_formula = NULL,
                                  continuous_Y = base::ifelse(is.null(num_Ybins),
                                                              TRUE,FALSE)){
 
