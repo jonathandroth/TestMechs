@@ -8,7 +8,7 @@
 #' @param plot_nts (Optional) If TRUE, we plot f_{Y,M=0 | D=1} and f_{Y,M=0 | D=0}. Otherwise, we plot f_{Y,M=1 | D=1} and f_{Y,M=1 | D=0}. Default is FALSE
 #' @param density_1_label (Optional) The label on the plot for the d=1 density.
 #' @param density_0_label (Optional) The label on the plot for the d=0 density.
-#' @param continuous_Y (Optional) Should Y be treated as continuous for density estimation. Default is TRUE. Use FALSE for discrete Y
+#' @param continuous_Y (Optional) Should Y be treated as continuous for density estimation. Default is FALSE.
 #' @param reg_formula (Optional) Regression formula for observational adjustment  
 #' @param num_Ybins (Optional) If specified, Y is discretized into the given number of bins (if num_Ybins is larger than the number of unique values of Y, no changes are made)
 #' @return A ggplot object showing partial densities
@@ -31,8 +31,7 @@ partial_density_plot <- function(df,
                                  density_0_label = "f(Y,M=1|D=0)",
                                  num_Ybins = NULL,
                                  reg_formula = NULL,
-                                 continuous_Y = base::ifelse(is.null(num_Ybins),
-                                                             TRUE,FALSE)){
+                                 continuous_Y = FALSE){
 
   df <- remove_missing_from_df(df = df,
                                d = d,
@@ -73,10 +72,21 @@ partial_density_plot <- function(df,
   }
 
   yvec <- df[[y]]
-
+  
+  #Discretize y if needed
   if(!is.null(num_Ybins)){
     yvec <- discretize_y(yvec = yvec, numBins = num_Ybins)
-df[[y]] <- yvec
+    df[[y]] <- yvec
+  } else {
+    continuous_y_flag <- n / length(unique(yvec)) <= 30
+    if (!continuous_Y && continuous_y_flag) {
+      message("continous_Y is set to FALSE but the outcome appears to be continuous. We are discretizing using 5 bins. 
+              You can change the number of bins by setting the num_Ybins argument, or specify continuous_Y = TRUE to 
+              use kernel density estimates tailored for continuous variables." )
+      num_Ybins <- 5
+      yvec <- discretize_y(yvec = yvec, numBins = num_Ybins)
+      df[[y]] <- yvec
+    }
   }
 
   partial_densities_and_shares <- compute_partial_densities_and_shares(df = df,
