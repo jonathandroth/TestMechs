@@ -1194,7 +1194,7 @@ get_IFs <- function(yvec, dvec, mvec, df, d, reg_formula = NULL, my_values, mval
 
 # Randomised design (reg_formula is NULL or trivial)
   
-  if (is.null(reg_formula) || identical(as.character(reg_formula), "~ treat")){
+  if (is.null(reg_formula)){
     
     for(i in 1:NROW(my_values)){
       p_ym_0_indicators <- (yvec == my_values$y[i]) &
