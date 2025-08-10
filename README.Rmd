@@ -25,7 +25,7 @@ null of full mediation", which conjectures that the effect of a treatment
 operates through a particular conjectured mechanism (or set of mechanisms)
 M. It also provides lower bounds on the fraction of "always-takers" who are affected
 by the treatment despite having the same value of M regardless of treatment
-status. For now, the package assumes that the treatment is as good as randomly assigned (as in an RCT); we hope to add support for conditional random assignment in future iterations of the package. Note that the approach in the paper requires the mediator $M$ to be discrete. 
+status. All core functions in the package — test_sharp_null(), lb_frac_affected(), and partial_density_plot() — support conditional random assignment and accept a reg_formula argument. When you provide a formula, the package regression-adjusts the relevant partial probabilities using OLS or IV. Note that the approach in the paper requires the mediator $M$ to be discrete. If reg_formula is omitted, the functions assume that the treatment is as good as randomly assigned (as in an RCT).
 
 ## Installation
 
@@ -51,7 +51,7 @@ $M$. We consider three choices for $M$: (a) the presence of a grandmother in the
 home, (b)relationship quality with the woman's husband, and (c) the combination
 of these two mechanisms.
 
-
+## Randomly-assigned setting 
 We start with loading the required packages and the data.
 ```{r, message = F, warning=F}
 # Load TestMechs
@@ -81,7 +81,9 @@ The main functions we will be using are: 1) `partial_density_plot()` to plot the
 partial densities to visually detect potential violations of the *sharp null*,
 2) `test_sharp_null()` to conduct a statistical test for the *sharp null* and 3)
 `lb_frac_affected()` to compute the sharp lower bound for the fraction of
-always-takers (or never-takers) that are affected by treatment. While this
+always-takers (or never-takers) that are affected by treatment. Each function can be adjusted for conditional 
+random assignment by providing a reg_formula if needed (e.g., adding baseline covariates or instruments).
+While this
 example covers the basic usage of these functions, please refer to the
 documentation of each function (e.g., `?test_sharp_null`) for a more detailed
 description. 
@@ -314,3 +316,206 @@ lb_frac_both
 ```
 We estimate a lower bound of `r round(100 * lb_frac_both)` percent, although this does not appear
 to be statistically significant given the test result above.
+
+## Non-experimental setting
+The examples above focus on data from a randomized controlled trial, where treatment $D$ is randomly assigned (at least within strata or clusters). However, TestMechs can also be applied in observational or other non-experimental settings, as long as we have a way to adjust for the non-random assignment of $D$. The package provides the reg_formula argument in all core functions to handle such cases via regression adjustment. If the treatment $D$ is as good as random conditional on some observed covariates (selection on observables), you can include those covariates in a formula. The functions will then adjust the estimated partial probabilities using OLS regression (essentially controlling for those covariates when computing the distributions). For example, if in the Baranov et al. study the treatment assignment had depended on age_baseline, edu_mo_baseline, and wealth_baseline, we could adjust for it:
+
+### Graphical Evidence
+The partial_density_plot provides a visual check of the sharp null hypothesis for the grandmother mechanism, now adjusted for baseline covariates.
+```{r}
+nt_plot_ols <-
+  partial_density_plot(df = mother_data,
+                       d = "treat",
+                       m = "grandmother",
+                       y = "motherfinancial",
+                       num_Ybins = 5,
+                       plot_nts = T,
+                       reg_formula = "~ treat + age_baseline + edu_mo_baseline + wealth_baseline ",
+                       density_1_label = "Adj. Prob (P(Y,M=0|D=1))",
+                       density_0_label = "Adj. Prob (P(Y,M=0|D=0))") +
+  ylab("Adjusted Probability") +
+  xlab("Event: No Grandmother Present (M=0) and Y in Stated Range")
+
+nt_plot_ols +
+  theme(legend.position = "bottom",
+        legend.title = element_blank())
+```
+Here, we create an instrumental variable iv for the treatment variable treat. The partial_density_plot then uses this instrument to provide a more robust visual check if treat is endogenous.
+```{r}
+# Create instrument variable
+set.seed(123)
+mother_data$iv <- mother_data$treat + rnorm(nrow(mother_data), mean = 0, sd = 0.05)
+
+nt_plot_iv <-
+  partial_density_plot(df = mother_data,
+                       d = "treat",
+                       m = "grandmother",
+                       y = "motherfinancial",
+                       num_Ybins = 5,
+                       plot_nts = T,
+                       reg_formula = "~ age_baseline + edu_mo_baseline + wealth_baseline + (treat = iv)",
+                       density_1_label = "Adj. Prob (P(Y,M=0|D=1))",
+                       density_0_label = "Adj. Prob (P(Y,M=0|D=0))") +
+  ylab("Adjusted Probability") +
+  xlab("Event: No Grandmother Present (M=0) and Y in Stated Range")
+
+nt_plot_iv +
+  theme(legend.position = "bottom",
+        legend.title = element_blank())
+
+```
+### Testing the sharp null of full mediation
+In this example, reg_formula = "~ treat + age_baseline + edu_mo_baseline + wealth_baseline" tells the function to regression-adjust the calculations by first partialing out the effect of the age_baseline, edu_mo_baseline, wealth_baseline covariates (using OLS) from the treatment and outcome relationships. This would account for differences in covariates between treated and control groups, approximating a condition of conditional independence.
+```{r}
+test_result_gm_ols <- test_sharp_null(df = mother_data,
+                                       d = "treat",
+                                       m = "grandmother",
+                                       y = "motherfinancial",
+                                       reg_formula = "~ treat + age_baseline + edu_mo_baseline + wealth_baseline",   
+                                       method = "CS",
+                                       num_Ybins = 5,
+                                       cluster = "uc")
+test_result_gm_ols$pval
+```
+Here we repeat the test for full mediation by grandmother, but now using an instrumental variable iv for treat. This IV approach is useful if treat may be endogenous; the instrument (assumed to be random) provides exogenous variation in treat.
+```{r}
+test_result_gm_iv <- test_sharp_null(df = mother_data,
+                                       d = "treat",
+                                       m = "grandmother",
+                                       y = "motherfinancial",
+                                       reg_formula = "~ age_baseline + edu_mo_baseline + wealth_baseline + (treat = iv)",
+                                       method = "CS",
+                                       num_Ybins = 5,
+                                       cluster = "uc")
+
+test_result_gm_iv$pval
+```
+Even after accounting for covariates (OLS) or using an exogenous shock to treatment (IV), we still find statistically significant violations of the sharp-null. This strengthens the case that some part of the treatment effect bypasses the grandmother mechanism.
+
+### Calculating the lower bound on fraction of always-takers affected by outcome
+```{r}
+lb_nts_gm_ols <- lb_frac_affected(df = mother_data,
+                                 d = "treat",
+                                 m = "grandmother",
+                                 y = "motherfinancial",
+                                 num_Ybins = 5,
+                                 reg_formula = "~ treat + age_baseline + edu_mo_baseline + wealth_baseline",
+                                 at_group = 0)
+lb_nts_gm_ols
+```
+After controlling for baseline age, maternal education, and household wealth, we still find that at least $18 \%$ of never-takers are affected by the treatment.
+```{r}
+lb_nts_gm_iv <- lb_frac_affected(df = mother_data,
+                                 d = "treat",
+                                 m = "grandmother",
+                                 y = "motherfinancial",
+                                 num_Ybins = 5,
+                                 reg_formula = "~ age_baseline + edu_mo_baseline + wealth_baseline + (treat = iv)",
+                                 at_group = 0)
+lb_nts_gm_iv
+```
+The bound is approximately $17.7\%$ when we instrument for treatment, implying that the conclusion is robust to potential endogeneity of treat.
+
+### Results for an alternative mechanism (relationship quality with husband)
+```{r}
+test_result_rh_ols <- test_sharp_null(df = mother_data,
+                                       d = "treat",
+                                       m = "relationship_husb",
+                                       y = "motherfinancial",
+                                       reg_formula = "~ treat + age_baseline + edu_mo_baseline + wealth_baseline",   
+                                       method = "CS",
+                                       num_Ybins = 5,
+                                       cluster = "uc")
+test_result_rh_ols$pval
+```
+After conditioning on baseline age, education, and wealth, the Cox–Shi test still rejects the sharp-null that all of the treatment effect runs through relationship quality with the husband. Hence, even after regression adjustment, this mediator by itself cannot fully account for the programme’s impact on mothers’ financial empowerment.
+```{r}
+test_result_rh_iv <- test_sharp_null(df = mother_data,
+                                      d = "treat",
+                                      m = "relationship_husb",
+                                      y = "motherfinancial",
+                                      reg_formula = "~ age_baseline + edu_mo_baseline + wealth_baseline + (treat = iv)",
+                                      method = "CS",
+                                      num_Ybins = 5,
+                                      cluster = "uc")
+
+test_result_rh_iv$pval
+```
+Using the randomly-perturbed instrument (iv) to address potential endogeneity of the treatment slightly raises the p-value, but it remains below $5 \%$. The inference is therefore robust: relationship quality alone does not appear to mediate the entire effect.
+```{r}
+lb_nts_rh_ols <- lb_frac_affected(df = mother_data,
+                                 d = "treat",
+                                 m = "relationship_husb",
+                                 y = "motherfinancial",
+                                 num_Ybins = 5,
+                                 reg_formula = "~ treat + age_baseline + edu_mo_baseline + wealth_baseline",
+                                 at_group = NULL,
+                                 allow_min_defiers = TRUE)
+lb_nts_rh_ols
+```
+```{r}
+lb_nts_rh_iv <- lb_frac_affected(df = mother_data,
+                                 d = "treat",
+                                 m = "relationship_husb",
+                                 y = "motherfinancial",
+                                 num_Ybins = 5,
+                                 reg_formula = "~ age_baseline + edu_mo_baseline + wealth_baseline + (treat = iv)",
+                                 at_group = NULL,
+                                 allow_min_defiers = TRUE)
+lb_nts_rh_iv
+```
+Both specifications trigger the “minimum-defiers” warning. The warning simply states that a very small share of “defiers” (≈ 1.5 %) is mathematically required to reconcile the empirical joint distribution of $(Y,M,D)$ with the monotonicity assumption. After allowing for this minimal share, the lower-bound calculation proceeds as usual.
+
+### Combination of both mechanisms
+
+```{r}
+test_result_both_ols <- test_sharp_null(df = mother_data,
+                                       d = "treat",
+                                       m = c("relationship_husb",
+                                          "grandmother"),
+                                       y = "motherfinancial",
+                                       reg_formula = "~ treat + age_baseline + edu_mo_baseline + wealth_baseline",   
+                                       method = "CS",
+                                       num_Ybins = 5,
+                                       cluster = "uc")
+test_result_both_ols$pval
+```
+
+```{r}
+test_result_both_iv <- test_sharp_null(df = mother_data,
+                                      d = "treat",
+                                      m = c("relationship_husb",
+                                          "grandmother"),
+                                      y = "motherfinancial",
+                                      reg_formula = "~ age_baseline + edu_mo_baseline + wealth_baseline + (treat = iv)",
+                                      method = "CS",
+                                      num_Ybins = 5,
+                                      cluster = "uc")
+
+test_result_both_iv$pval
+```
+Because both p-values are well above conventional significance thresholds, we fail to reject the sharp-null hypothesis that the joint action of the two mediators fully transmits the treatment effect.
+```{r}
+lb_nts_both_ols <- lb_frac_affected(df = mother_data,
+                                 d = "treat",
+                                 m = c("relationship_husb",
+                                          "grandmother"),
+                                 y = "motherfinancial",
+                                 num_Ybins = 5,
+                                 reg_formula = "~ treat + age_baseline + edu_mo_baseline + wealth_baseline",
+                                 allow_min_defiers = TRUE)
+lb_nts_both_ols
+```
+Once we allow both mediators to operate jointly, approximately $6.5\%$ of individuals who would keep the same $M$ under treatment vs. control (always-/never-takers) are required to experience a residual direct effect on the outcome.
+```{r}
+lb_nts_both_iv <- lb_frac_affected(df = mother_data,
+                                 d = "treat",
+                                 m = c("relationship_husb",
+                                          "grandmother"),
+                                 y = "motherfinancial",
+                                 num_Ybins = 5,
+                                 reg_formula = "~ age_baseline + edu_mo_baseline + wealth_baseline + (treat = iv)",
+                                 allow_min_defiers = TRUE)
+lb_nts_both_iv
+```
+The IV-adjustment outcome is nearly identical to the OLS-adjustment outcome, confirming that potential endogeneity of treat does not materially change the conclusion. The routine checks whether the empirical data can satisfy the monotonicity assumption for the specified maximum share of defiers. Because of allow_min_defiers = TRUE, the function automatically relaxes the defier share to the smallest value compatible with the data ($\approx 1.5 \%$). 
