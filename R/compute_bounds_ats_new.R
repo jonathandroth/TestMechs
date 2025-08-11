@@ -74,10 +74,34 @@ compute_bounds_ats_new <- function(df,
                                num_gridpoints = 10^5){
 
   #features not yet implemented. Chen, you can fill these in and remove these errors
-  if(at_group != 1){stop("function is currently only implemented for at_group = 1")}
+  # if(at_group != 1){stop("function is currently only implemented for at_group = 1")}
   if(!is.null(reg_formula)){stop("reg_formula not yet implemented")}
   if(!is.null(max_defier_share)){stop("function is currently only implemented when max_defier_share = NULL") }
+  
 
+  # If at_group = 0 (Never-takers) 
+  # Flip D and M to convert never-takers into always-takers in a flipped scenario
+  if (at_group == 0) {
+    df[[m]] <- 1 - df[[m]]
+    df[[d]] <- 1 - df[[d]]
+    
+    # Compute bounds in the flipped scenario treating flipped group as always-takers
+    bounds_flipped <- compute_bounds_ats_new(df = df,
+                                             d = d, 
+                                             m = m, 
+                                             y = y, 
+                                             at_group = 1, 
+                                             max_defier_share = max_defier_share, 
+                                             reg_formula = reg_formula, 
+                                             num_gridpoints = num_gridpoints)
+    # Flip the sign of the bounds (because we flipped D)
+    return(data.frame(
+      lb = -bounds_flipped$ub,
+      ub = -bounds_flipped$lb
+    ))
+  }
+
+  
   df <- remove_missing_from_df(df = df,
                                d = d,
                                m = m,
