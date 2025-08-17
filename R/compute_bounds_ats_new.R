@@ -52,7 +52,7 @@ trimmed_expectation_from_cdf <- function(ecdf_table,
 
 
 
-
+#' @title Bounds on direct effect for always-takers
 #' @description Computes bounds on E[Y(1,k) - Y(1,k) | G = kk], the average direct effect for k-ATs for whom there is a direct effect of D on Y
 #' @param df A data frame
 #' @param d Name of the treatment variable in the df
@@ -62,13 +62,14 @@ trimmed_expectation_from_cdf <- function(ecdf_table,
 #' @param max_defiers_share Bound on the proportion of defiers in the population. Default is 0 which indicates that the monotonicity constraint is imposed.
 #' @param num_gridpoints (Optional.) The number of gridpoints used in evaluating the integral. Higher is more accurate but more computationally costly
 #' @importFrom "stats" "quantile"
+#' @export
 
 compute_bounds_ats_new <- function(df,
                                d,
                                m,
                                y,
                                at_group = 1,
-                               max_defier_share = NULL,
+                               max_defier_share = 0,
                                reg_formula = NULL,
                                num_gridpoints = 10^5){
 
