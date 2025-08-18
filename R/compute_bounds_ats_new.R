@@ -12,43 +12,71 @@
 trimmed_expectation_from_cdf <- function(ecdf_table,
                                          frac,
                                          upper = NULL,
-                                         num_gridpoints = 10^5){
-
-  # This is the function F^{-1}(u) := min{y : f(y) >= u}
+                                         num_gridpoints = 1e5) {
+  # ---- Preprocess CDF ----
+  stopifnot(is.data.frame(ecdf_table),
+            all(c("y","cdf") %in% names(ecdf_table)))
+  
+  et <- ecdf_table[order(ecdf_table$y), , drop = FALSE]
+  et$cdf <- as.numeric(et$cdf)
+  et$cdf[!is.finite(et$cdf)] <- 0
+  et$cdf <- pmin(1, pmax(0, et$cdf))  # clamp to [0,1]
+  if (nrow(et)) {
+    et$cdf <- cummax(et$cdf)          # enforce nondecreasing
+    if (max(et$cdf, na.rm = TRUE) > 0) {
+      et$cdf[nrow(et)] <- 1           # if any mass, force last point to 1
+    }
+  }
+  
+  # robust inverse CDF: returns finite y for all u in [0,1]
   inv_cdf <- function(u) {
-    min(ecdf_table$y[ecdf_table$cdf >= u])
+    if (!nrow(et)) return(NA_real_)
+    u <- max(0, min(1, as.numeric(u)))  # clamp u
+    
+    cdf <- et$cdf
+    y   <- et$y
+    
+    # if CDF never reaches u -> return largest y (avoid empty set)
+    if (max(cdf, na.rm = TRUE) < u) return(max(y, na.rm = TRUE))
+    # if already >= u at the start -> return smallest y
+    if (cdf[1] >= u) return(y[1])
+    
+    idx <- which(cdf >= u)[1]
+    if (is.na(idx)) max(y, na.rm = TRUE) else y[idx]
   }
-
-  #If upper = T, we calculate E[F^{-1} | U \in [1-frac,1]]
-  #If upper = F, we calculate E[F^{-1} | U \in [0,frac]]
-  #If upper = NULL, we calculate both
-  if(is.null(upper)){
-    return(
-      list(lb =
-             trimmed_expectation_from_cdf(
-                                          ecdf_table = ecdf_table,
-                                          frac = frac,
-                                          upper = FALSE,
-                                          num_gridpoints = num_gridpoints),
-           ub = trimmed_expectation_from_cdf(
-                                          ecdf_table = ecdf_table,
-                                          frac = frac,
-                                          upper = TRUE,
-                                          num_gridpoints = num_gridpoints)))
+  
+  # compute both tails if requested
+  if (is.null(upper)) {
+    return(list(
+      lb = trimmed_expectation_from_cdf(et, frac, upper = FALSE, num_gridpoints = num_gridpoints),
+      ub = trimmed_expectation_from_cdf(et, frac, upper = TRUE,  num_gridpoints = num_gridpoints)
+    ))
   }
-
-  if(upper == T){
-    u_grid <- seq(from = 1-frac, to = 1, length.out = num_gridpoints)
-  }else{
-    u_grid <- seq(from = 0, to = frac, length.out = num_gridpoints)
+  
+  # ---- u-grid construction with numerical guards ----
+  frac <- as.numeric(frac)
+  if (!is.finite(frac)) frac <- 0
+  frac <- max(0, min(1, frac))
+  
+  eps <- sqrt(.Machine$double.eps)      # tiny gap to avoid exactly 1
+  if (upper) {
+    u_start <- max(0, 1 - frac)
+    u_end   <- 1 - eps
+    if (u_start > u_end) u_start <- u_end
+  } else {
+    u_start <- 0
+    u_end   <- min(frac, 1 - eps)
+    if (u_end < u_start) u_end <- u_start
   }
-
-
-  trimmed_expectation <- mean(sapply(u_grid, inv_cdf))
-
-  return(trimmed_expectation)
+  
+  if (num_gridpoints <= 1) {
+    u_grid <- u_start
+  } else {
+    u_grid <- seq(from = u_start, to = u_end, length.out = num_gridpoints)
+  }
+  
+  mean(vapply(u_grid, inv_cdf, numeric(1)))
 }
-
 
 
 
