@@ -350,8 +350,8 @@ compute_bounds_ats_new <- function(df,
   } else{
     # Regression-inferred CDFs (discrete Y only)
     yuniq <- sort(unique(yvec))
-    if (length(yuniq) > 50) {
-      stop("reg_formula currently supported for discrete Y; unique Y values are larger than 50.")
+    if (!is_discrete_Y) {
+      stop("reg_formula currently supported for discrete Y; Y variable might be continuous.")
     }
     
     # Match mediator pattern: M == at_group
@@ -405,19 +405,47 @@ compute_bounds_ats_new <- function(df,
     }
     
     # Convert to conditional PMFs of Y | M=k, D=d
-    pmf1 <- if (p_mk_d1 > 0) pmax(0, partial_pmf_d1) / p_mk_d1 else rep(0, length(partial_pmf_d1))
-    pmf0 <- if (p_mk_d0 > 0) pmax(0, partial_pmf_d0) / p_mk_d0 else rep(0, length(partial_pmf_d0))
+    # Nonnegative joint predictions (from your regression loop):
+    joint1 <- pmax(0, as.numeric(partial_pmf_d1))  # ≈ P(Y=y, M=at_group | D=1)
+    joint0 <- pmax(0, as.numeric(partial_pmf_d0))  # ≈ P(Y=y, M=at_group | D=0)
     
-    # Normalize (guard tiny drift)
-    s1 <- sum(pmf1)
-    if (s1 > 0) pmf1 <- pmf1 / s1
-    s0 <- sum(pmf0)
-    if (s0 > 0) pmf0 <- pmf0 / s0
+    # Build a VALID conditional PMF with safe empirical fallback
+    build_conditional_pmf <- function(joint, y_cell) {
+      s <- sum(joint)
+      if (!is.finite(s) || s <= .Machine$double.eps) {
+        # fallback: empirical conditional PMF of Y | M=at_group, D=d
+        if (length(y_cell) == 0L) return(rep(0, length(yvalues)))
+        tab <- table(factor(y_cell, levels = yvalues))
+        return(as.numeric(tab) / sum(tab))
+      }
+      pmf <- joint / s
+      pmf[pmf < 0] <- 0
+      s2 <- sum(pmf)
+      if (s2 > 0) pmf <- pmf / s2
+      pmf
+    }
     
-    # CDFs
-    ecdf_y_mkd1 <- pmin(1, cumsum(pmf1))
-    ecdf_y_mkd0 <- pmin(1, cumsum(pmf0))
-  }
+    pmf1 <- build_conditional_pmf(joint1, y_cell = yvec[mvec == at_group & dvec == 1])
+    pmf0 <- build_conditional_pmf(joint0, y_cell = yvec[mvec == at_group & dvec == 0])
+    
+    # Raw CDF vectors
+    ecdf_y_mkd1 <- cumsum(pmf1)
+    ecdf_y_mkd0 <- cumsum(pmf0)
+    
+    # --- Validator that takes ONLY the CDF vector and returns a fixed CDF vector ---
+    .validate_cdf <- function(cdfv) {
+      if (!length(cdfv)) return(cdfv)
+      cdfv[!is.finite(cdfv)] <- 0
+      cdfv <- pmin(1, pmax(0, cdfv))  # clamp to [0,1]
+      cdfv <- cummax(cdfv)            # enforce nondecreasing
+      cdfv[length(cdfv)] <- 1         # FORCE last point to 1
+      cdfv
+    }
+    
+    # Validate the CDF vectors
+    ecdf_y_mkd1 <- .validate_cdf(ecdf_y_mkd1)
+    ecdf_y_mkd0 <- .validate_cdf(ecdf_y_mkd0)
+    }
   
   
   
