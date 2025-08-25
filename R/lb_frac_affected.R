@@ -55,7 +55,7 @@ lb_frac_affected <- function(df,
 
 
   yvec <- df[[y]]
-
+  n <- NROW(yvec)
 
   #Discretize y if needed
   if(!is.null(num_Ybins)){
