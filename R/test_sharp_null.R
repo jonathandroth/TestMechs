@@ -1196,7 +1196,7 @@ get_IFs <- function(yvec, dvec, mvec, df, d, reg_formula = NULL, my_values, mval
   p_m_1_noncentered_IFs <- matrix(NA, nrow = n, ncol = k )
   p_m_1_centered_IFs <- matrix(NA, nrow = n, ncol = k )
 
-# Randomised design (reg_formula is NULL or trivial)
+# Randomised design (reg_formula is NULL)
   
   if (is.null(reg_formula)){
     
@@ -1281,31 +1281,58 @@ get_IFs <- function(yvec, dvec, mvec, df, d, reg_formula = NULL, my_values, mval
         ZtXinv <- solve(crossprod(Zmat, Xmat) / n) # (Z'X/n)^(-1)  (q × p)
         IF_beta <- score %*% ZtXinv                # n × p
       } else {
-        Xmat   <- stats::model.matrix(mod)                # n × p
+        Xmat   <- stats::model.matrix(mod, type = "rhs")                # n × p
         score  <- Xmat * residuals(mod)            # x_i e_i      (n × p)
         XtXinv <- solve(crossprod(Xmat) / n)       # (X'X/n)^(-1)
         IF_beta <- score %*% XtXinv                # n × p
       }
   
-      mu0 <- stats::predict(mod, newdata = df0)
-      mu1 <- stats::predict(mod, newdata = df1)
-      p0  <- mean(mu0)
-      p1 <- mean(mu1)
-      
-      X0bar <- colMeans(stats::model.matrix(mod, df0))
-      X1bar <- colMeans(stats::model.matrix(mod, df1))
-      
-
-      # centred IFs via delta-method
-      p_ym_0_centered_IFs[, idx] <- (mu0 - p0) + as.numeric(IF_beta %*% X0bar)
-      p_ym_1_centered_IFs[, idx] <- (mu1 - p1) + as.numeric(IF_beta %*% X1bar)
-      
-      
-      # non-centered
-      p_ym_0_noncentered_IFs[,idx] <- mu0 / (n0/n)
-      p_ym_1_noncentered_IFs[,idx] <- mu1 / (n1/n)
+              
+        # Ensure IF_beta columns have the same names/order as the RHS basis
+        colnames(IF_beta) <- colnames(Xmat)
+        # one-liner to recover the used rows (length should be 284 in your case)
+        used_idx <- which(rowSums(!is.finite(stats::model.matrix(mod, type = "rhs", newdata = df))) == 0)
+        
+        mu0 <- as.numeric(stats::predict(mod, newdata = df0))
+        mu1 <- as.numeric(stats::predict(mod, newdata = df1))
+        mu0 <- mu0[is.finite(mu0)] 
+        mu1 <- mu1[is.finite(mu1)] 
+        
+        p0  <- mean(mu0, na.rm =TRUE)
+        p1 <- mean(mu1, na.rm = TRUE)
+        
+        X0bar <- colMeans(stats::model.matrix(mod, type = "rhs", newdata = df0), na.rm = TRUE)
+        X1bar <- colMeans(stats::model.matrix(mod, type = "rhs", newdata = df1), na.rm = TRUE)
+        
+        
+        # centred IFs via delta-method
+        p_ym_0_centered_IFs[used_idx, idx] <- (mu0 - p0) + as.numeric(IF_beta %*% X0bar)
+        p_ym_1_centered_IFs[used_idx, idx] <- (mu1 - p1) + as.numeric(IF_beta %*% X1bar)
+        
+        
+        # non-centered
+        p_ym_0_noncentered_IFs[used_idx,idx] <- mu0 / (n0/n)
+        p_ym_1_noncentered_IFs[used_idx,idx] <- mu1 / (n1/n)
       }
-      }
+    }
+    
+    keep <- rowSums(!is.finite(p_ym_0_centered_IFs)) == 0 &
+      rowSums(!is.finite(p_ym_1_centered_IFs)) == 0 &
+      rowSums(!is.finite(p_ym_0_noncentered_IFs)) == 0 &
+      rowSums(!is.finite(p_ym_1_noncentered_IFs)) == 0
+    
+    keep_idx <- which(keep)
+    
+    p_ym_0_centered_IFs       <- p_ym_0_centered_IFs[keep, , drop = FALSE]
+    p_ym_1_centered_IFs       <- p_ym_1_centered_IFs[keep, , drop = FALSE]
+    p_ym_0_noncentered_IFs    <- p_ym_0_noncentered_IFs[keep, , drop = FALSE]
+    p_ym_1_noncentered_IFs    <- p_ym_1_noncentered_IFs[keep, , drop = FALSE]
+    
+    p_m_0_centered_IFs    <- p_m_0_centered_IFs[keep, , drop = FALSE]
+    p_m_1_centered_IFs    <- p_m_1_centered_IFs[keep, , drop = FALSE]
+    p_m_0_noncentered_IFs <- p_m_0_noncentered_IFs[keep, , drop = FALSE]
+    p_m_1_noncentered_IFs <- p_m_1_noncentered_IFs[keep, , drop = FALSE]
+    
     
     for (i in 1:k){
       idx <- which(my_values$m == mvalues[i])
@@ -1363,7 +1390,9 @@ get_IFs <- function(yvec, dvec, mvec, df, d, reg_formula = NULL, my_values, mval
               p_m_0_noncentered_IFs = p_m_0_noncentered_IFs,
               p_m_0_centered_IFs = p_m_0_centered_IFs,
               p_m_1_noncentered_IFs = p_m_1_noncentered_IFs,
-              p_m_1_centered_IFs = p_m_1_centered_IFs
+              p_m_1_centered_IFs = p_m_1_centered_IFs,
+              keep       = keep,
+              keep_idx = keep_idx
   ))
 
 }
@@ -1374,7 +1403,7 @@ analytic_variance <-
            my_values, mvalues = unique(my_values$m),
            inequalities_only = TRUE, exploit_binary_m = FALSE){
 
-    IFs <- get_IFs(yvec = yvec,
+    IF_out <- get_IFs(yvec = yvec,
                    dvec = dvec,
                    mvec = mvec,
                    df = df,
@@ -1383,17 +1412,22 @@ analytic_variance <-
                    my_values = my_values,
                    mvalues = mvalues,
                    inequalities_only = inequalities_only,
-                   exploit_binary_m = exploit_binary_m)$beta.obs_centered_IFs
-
+                   exploit_binary_m = exploit_binary_m)
+    IFs <- IF_out$beta.obs_centered_IFs
+    
+    if (length(clustervec) != length(IF_out$keep_idx)) {
+      clustervec <- clustervec[IF_out$keep_idx]
+      yvec <- yvec[IF_out$keep_idx]
+    }
+    
     #Sum the IFs within cluster
     IFs_clustered <- base::rowsum(x = IFs,
                                   group = clustervec)
-
-    #Variance is Cov(IFs * N_cluster/N  ) / N_Cluster
+    
     n <- length(yvec)
     c <- length(unique(clustervec))
-
+    
     vcv <- cov(IFs_clustered * c/n) / NROW(IFs_clustered)
-
+    
     return(vcv)
   }
