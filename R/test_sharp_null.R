@@ -118,10 +118,14 @@ devtools::install_github('conroylau/lpinfer')")
       return(result)
     }
     else if (method == "toru") {
+      if(!is.null(reg_formula)){
+        stop("reg_formula should be NULL if method = toru")
+      }else{
       result <- test_sharp_null_toru(df, d, m, y, B = B, alpha = alpha,
                                      num_Ybins = NULL, cluster = cluster)
       
       return(result)
+      }
     }
     else {
       stop("Method must be either ARP, CS, FSST or toru if use_binary = TRUE")
