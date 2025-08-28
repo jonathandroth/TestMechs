@@ -140,6 +140,64 @@ compute_bounds_ats_new <- function(df,
   mvec <- df[[m]]
   n <- nrow(df)
 
+
+  # feasibility check when m is a 0/1 indicator
+  is_binary_vec <- function(v){
+    u <- sort(unique(v[is.finite(v)]))
+    length(u) <= 2 && all(u %in% c(0,1))
+  }
+  
+  # Try to infer if m == 1{ parent == some value } for an ordinal/numeric parent column.
+  infer_parent_of_indicator <- function(df, mname){
+    mv <- df[[mname]]
+    if (!is_binary_vec(mv)) return(NULL)
+    
+    # We look for a single column 'parent' and value 'v' such that (parent==v) <-> (m==1)
+    for (cn in names(df)) {
+      if (cn == mname) next
+      col <- df[[cn]]
+      # only consider numeric/integer/ordered-factor columns as plausible parents
+      if (!(is.numeric(col) || is.integer(col) || is.ordered(col))) next
+      
+      pos <- which(mv == 1 & is.finite(mv))
+      if (!length(pos)) next
+      uvals <- unique(col[pos])
+      uvals <- uvals[is.finite(uvals)]
+      if (length(uvals) != 1) next
+      v <- uvals[1]
+      
+      # Check equivalence on rows where both sides are observed
+      both_ok <- is.finite(mv) & is.finite(col)
+      equiv <- all((col[both_ok] == v) == (mv[both_ok] == 1))
+      if (!equiv) next
+      
+      # Determine if v is min or max value in the parent column
+      parent_vals <- sort(unique(col[is.finite(col)]))
+      is_min <- (v == min(parent_vals))
+      is_max <- (v == max(parent_vals))
+      return(list(parent = cn, v = v, is_min = is_min, is_max = is_max))
+    }
+    NULL
+  }
+  
+  # If m is binary, try to detect if it's a middle-category indicator of some parent column.
+  if (is_binary_vec(mvec)) {
+    inf <- infer_parent_of_indicator(df, m)
+    if (!is.null(inf)) {
+      if (!(inf$is_min || inf$is_max)) {
+        warning(sprintf(
+          "Mediator '%s' looks like 1{%s == %s}, which is a middle category of '%s'. ",
+          m, inf$parent, as.character(inf$v), inf$parent
+        ),
+        "Binary monotonicity is not valid for a middle-category dummy. ",
+        "Please use the multi-valued mediator ('", inf$parent, "') with at_group = ", as.character(inf$v), ".")
+        return(data.frame(lb = NA_real_, ub = NA_real_))
+      }
+      # else: it's min or max -> ok to proceed down the binary path
+    }
+    # If we couldn't infer a parent, we proceed (cannot reliably tell; keep previous behavior)
+  }
+
   # compute theta_{kk}^{min} using the SAME LP structure as in lb_frac_affected,
   # but with a different objective (minimize \theta_{kk} instead of \nu_k).
   # replace Y|M=1,D with Y|M=k,D
