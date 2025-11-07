@@ -89,167 +89,40 @@ test_sharp_null_binary_m <- function(df,
   
   ## Define function for beta.obs
   get_beta.obs <- function(yvec, dvec, mvec, df, d, yvalues, reg_formula) {
-    #Get partial density for Y,M=1|D=1
-    # randomized case
-    if(is.null(reg_formula)){
-    p_y1_1 <- purrr::map_dbl(.x = 1:length(yvalues),
-                             .f = ~mean(yvec[dvec == 1] == yvalues[.x]
-                                        & mvec[dvec == 1] == 1 ))
-    } else{
-      # non-experimental case
-      iv_spec <- extract_iv(reg_formula, d)
-      p_y1_1 <- numeric(length(yvalues))
-      
-      for(j in 1:length(yvalues)){
-        df$lhs <- as.numeric(yvec ==yvalues[j] & mvec == 1)
-        if (var(df$lhs) == 0) {                           # all-0 or all-1 case
-          p_y1_1[j] <- df$lhs[1]                          # 0 or 1, no regression
-          next
-        }
-        if (iv_spec$is_iv) {
-          # IV syntax: lhs ~ controls | treat ~ instruments
-          ctrl  <- paste(iv_spec$controls, collapse = " + ")
-          instr <- paste(iv_spec$instr,     collapse = " + ")
-          fml   <- as.formula(sprintf("lhs ~ %s | %s ~ %s",
-                                      ctrl, iv_spec$treat, instr))
-        } else {
-          # OLS: lhs ~ treat + controls
-          rhs   <- paste(c(iv_spec$treat, iv_spec$controls), collapse = " + ")
-          fml   <- as.formula(paste("lhs ~", rhs))
-        }
-        
-        reg_vars <- c(d, m, y, iv_spec$controls, iv_spec$instr, cluster)
-        df_clean <- df %>% tidyr::drop_na(all_of(reg_vars))
-        
-        reg <- fixest::feols(fml, data = df_clean)
-        
-        df_one    <- df_clean               # counter-factual D = 1
-        df_one[[d]] <- 1
-        
-        p_y1_1[j] <- mean(predict(reg, newdata = df_one))
-      }
+    if (!is.null(reg_formula)) {
+      # Use shared regression helpers from test_sharp_null.R
+      p_ym_0_vec <- compute_regression_probs(df, yvec, mvec, my_values, d, reg_formula, control_transform)
+      p_ym_1_vec <- compute_regression_probs(df, yvec, mvec, my_values, d, reg_formula, treated_transform)
     }
-    #Get partial density for Y,M=1|D=0
-    if(is.null(reg_formula)){
+
+    # Get partial density for Y,M = 1 | D = d
+    if (is.null(reg_formula)) {
+      p_y1_1 <- purrr::map_dbl(.x = 1:length(yvalues),
+                               .f = ~mean(yvec[dvec == 1] == yvalues[.x]
+                                          & mvec[dvec == 1] == 1 ))
       p_y1_0 <- purrr::map_dbl(.x = 1:length(yvalues),
                                .f = ~mean(yvec[dvec == 0] == yvalues[.x]
                                           & mvec[dvec == 0] == 1 ))
-    } else{
-      iv_spec  <- extract_iv(reg_formula, d)
-      p_y1_0   <- numeric(length(yvalues))
-      
-      for (j in 1:length(yvalues)) {
-        df$lhs <- as.numeric(yvec == yvalues[j] & mvec == 1)
-        
-        if (var(df$lhs) == 0) {              # degenerate (all-0 or all-1)
-          p_y1_0[j] <- df$lhs[1]             # 0 or 1, no regression
-          next
-        }
-        
-        if (iv_spec$is_iv) {
-          ctrl  <- paste(iv_spec$controls, collapse = " + ")
-          instr <- paste(iv_spec$instr,     collapse = " + ")
-          fml   <- as.formula(sprintf("lhs ~ %s | %s ~ %s",
-                                      ctrl, iv_spec$treat, instr))
-        } else {
-          rhs   <- paste(c(iv_spec$treat, iv_spec$controls), collapse = " + ")
-          fml   <- as.formula(paste("lhs ~", rhs))
-        }
-        
-        reg_vars <- c(d, m, y, iv_spec$controls, iv_spec$instr, cluster)
-        df_clean <- df %>% tidyr::drop_na(all_of(reg_vars))
-        
-        reg <- fixest::feols(fml, data = df_clean)
-        
-        df_zero    <- df_clean
-        df_zero[[d]] <- 0                    # set every unit to control
-        
-        p_y1_0[j]  <- mean(predict(reg, newdata = df_zero))
-      }
+    } else {
+      # Rows with M = 1 map to the p_y1_1 / p_y1_0 probabilities
+      p_y1_1 <- p_ym_1_vec[my_values$m == 1]
+      p_y1_0 <- p_ym_0_vec[my_values$m == 1]
     }
 
-    if(!ats_only){
-      
-      #Get partial density for Y,M=0|D=1
-      if (is.null(reg_formula)){
+    if (!ats_only) {
+      # Get partial density for Y,M = 0 | D = d
+      if (is.null(reg_formula)) {
         p_y0_1 <- purrr::map_dbl(.x = 1:length(yvalues),
                                  .f = ~mean(yvec[dvec == 1] == yvalues[.x]
                                             & mvec[dvec == 1] == 0 ))
-      } else{
-        iv_spec  <- extract_iv(reg_formula, d)
-        p_y0_1   <- numeric(length(yvalues))
-        
-        for (j in 1:length(yvalues)) {
-          
-          df$lhs <- as.numeric(yvec == yvalues[j] & mvec == 0)
-          
-          if (var(df$lhs) == 0) {              # degenerate (all-0 or all-1)
-            p_y0_1[j] <- df$lhs[1]             # 0 or 1, no regression
-            next
-          }
-          
-          if (iv_spec$is_iv) {
-            ctrl  <- paste(iv_spec$controls, collapse = " + ")
-            instr <- paste(iv_spec$instr,     collapse = " + ")
-            fml   <- as.formula(sprintf("lhs ~ %s | %s ~ %s",
-                                        ctrl, iv_spec$treat, instr))
-          } else {
-            rhs   <- paste(c(iv_spec$treat, iv_spec$controls), collapse = " + ")
-            fml   <- as.formula(paste("lhs ~", rhs))
-          }
-          
-          reg_vars <- c(d, m, y, iv_spec$controls, iv_spec$instr, cluster)
-          df_clean <- df %>% tidyr::drop_na(all_of(reg_vars))
-          
-          reg       <- fixest::feols(fml, data = df_clean)
-          
-          df_one     <- df_clean
-          df_one[[d]] <- 1                     # set every unit to treated
-          
-          p_y0_1[j]  <- mean(predict(reg, newdata = df_one))
-        }
-      }
-      
-      #Get partial density for Y,M=0|D=0
-      if(is.null(reg_formula)){
         p_y0_0 <- purrr::map_dbl(.x = 1:length(yvalues),
                                  .f = ~mean(yvec[dvec == 0] == yvalues[.x]
                                             & mvec[dvec == 0] == 0 ))
-      } else{
-        iv_spec  <- extract_iv(reg_formula, d)
-        p_y0_0   <- numeric(length(yvalues))
-        
-        for (j in 1:length(yvalues)) {
-          
-          df$lhs <- as.numeric(yvec == yvalues[j] & mvec == 0)
-          
-          if (var(df$lhs) == 0) {              # degenerate (all-0 or all-1)
-            p_y0_0[j] <- df$lhs[1]             # 0 or 1, no regression
-            next
-          }
-          
-          if (iv_spec$is_iv) {
-            ctrl  <- paste(iv_spec$controls, collapse = " + ")
-            instr <- paste(iv_spec$instr,     collapse = " + ")
-            fml   <- as.formula(sprintf("lhs ~ %s | %s ~ %s",
-                                        ctrl, iv_spec$treat, instr))
-          } else {
-            rhs   <- paste(c(iv_spec$treat, iv_spec$controls), collapse = " + ")
-            fml   <- as.formula(paste("lhs ~", rhs))
-          }
-          
-          reg_vars <- c(d, m, y, iv_spec$controls, iv_spec$instr, cluster)
-          df_clean <- df %>% tidyr::drop_na(all_of(reg_vars))
-          
-          reg   <- fixest::feols(fml, data = df_clean)
-          
-          df_zero     <- df_clean
-          df_zero[[d]] <- 0                     # set every unit to control
-          
-          p_y0_0[j]   <- mean(predict(reg, newdata = df_zero))
-        }
+      } else {
+        # Rows with M = 0 map to the p_y0_1 / p_y0_0 probabilities
+        p_y0_1 <- p_ym_1_vec[my_values$m == 0]
+        p_y0_0 <- p_ym_0_vec[my_values$m == 0]
       }
-    
     }
     #We return differences in partial densities that should be positive
     if(ats_only){
