@@ -501,62 +501,6 @@ compute_max_p_difference <- function(dvec, mdf, yvec, wvec=NULL,
 }
 
 
-# Fit a model lhs ~ controls +treat OR IV, predict at D = d_val,
-# average predictions (optionally weighted). Returns scalar.
-.predict_mean <- function(lhs_vec,
-                          df,
-                          d_var,
-                          d_val,
-                          reg_formula,
-                          cluster = NULL,
-                          wvec = NULL){
-  
-  iv_spec <- extract_iv(reg_formula, d_var)
-  
-  df$lhs <- lhs_vec
-  
-  # variables needed for NA drop
-  base_vars <- c(d_var, "lhs", iv_spec$controls, iv_spec$instr)
-  base_vars <- unique(base_vars[base_vars != ""])
-  if (!is.null(cluster)) base_vars <- unique(c(base_vars, cluster))
-  
-  df_clean <- df[stats::complete.cases(df[, base_vars, drop = FALSE]), , drop = FALSE]
-  if (nrow(df_clean) == 0L) return(NA_real_)
-  
-  if (iv_spec$is_iv) {
-    ctrl  <- paste(iv_spec$controls, collapse = " + ")
-    instr <- paste(iv_spec$instr,     collapse = " + ")
-    fml   <- as.formula(sprintf("lhs ~ %s%s | %s ~ %s",
-                                ctrl,
-                                if (nzchar(ctrl)) "" else "1",  # ensure intercept when no ctrls
-                                paste(iv_spec$treat, collapse = " + "),
-                                instr))
-  } else {
-    rhs   <- paste(c(iv_spec$treat, iv_spec$controls), collapse = " + ")
-    fml   <- as.formula(paste("lhs ~", if (nzchar(rhs)) rhs else "1"))
-  }
-  
-  # Fix d to desired value
-  df_cf <- df_clean
-  df_cf[[d_var]] <- d_val
-  
-  # feols call (no cluster in prediction step; cluster affects SEs only)
-  reg <- fixest::feols(fml, data = df_clean)
-  
-  preds <- as.numeric(predict(reg, newdata = df_cf))
-  
-  if (is.null(wvec)) {
-    mean(preds, na.rm = TRUE)
-  } else {
-    # keep weights aligned; drop same rows we dropped
-    w_clean <- wvec[rownames(df) %in% rownames(df_clean)]
-    stats::weighted.mean(preds, w_clean, na.rm = TRUE)
-  }
-}
-
-# Regression version compute_max_p_difference
-# Computes, for each m-value, sum_y max{ P(Y=y,M=m|D=1) - P(Y=y,M=m|D=0), 0 }
-# where the joint probabilities are **predicted via reg_formula**.
 compute_max_p_difference_reg <- function(dvec,
                                          mdf,
                                          yvec,
@@ -568,13 +512,13 @@ compute_max_p_difference_reg <- function(dvec,
                                          reg_formula,
                                          cluster = NULL,
                                          ...){
-  
+
   if (continuous_Y) {
     stop("reg_formula branch currently supports only discrete Y (continuous_Y = FALSE).")
   }
-  
+
   if (is.null(wvec)) wvec <- rep(1, length(yvec))
-  
+
   # sanity: drop rows with NAs in key inputs to keep parity with simple branch
   keep_rows <- stats::complete.cases(dvec, mdf, yvec, wvec)
   dvec <- dvec[keep_rows]
@@ -582,112 +526,58 @@ compute_max_p_difference_reg <- function(dvec,
   wvec <- wvec[keep_rows]
   mdf  <- mdf[keep_rows, , drop = FALSE]
   df   <- df[keep_rows, , drop = FALSE]
-  
-  # unique rows of mdf (each "mechanism" pattern)
+
+  # create a univariate representation of the mediator patterns so we can reuse
+  # the regression helpers defined in test_sharp_null.R
   mvalues <- unique(mdf)
-  
-  # main loop
-  max_p_diffs <- apply(mvalues, 1, function(mvalue){
-    
-    # TRUE/FALSE vector: this obs has m = mvalue
-    mindex <- apply(mdf, 1, function(x) all(x == mvalue))
-    
-    # unique y-values *within* these mindex rows (as original code does)
-    yvalues <- unique(yvec[mindex])
-    
-    # Joint probabilities via regression
-    # P(Y=y, M=m | set D = 1/0)  (predicting indicator LHS)
-    partial_pmf_1 <- purrr::map_dbl(
-      yvalues,
-      ~{
-        lhs <- as.numeric((yvec == .x) & mindex)
-        .predict_mean(lhs_vec = lhs, df = df, d_var = d, d_val = 1,
-                      reg_formula = reg_formula, cluster = cluster, wvec = wvec)
-      }
-    )
-    
-    partial_pmf_0 <- purrr::map_dbl(
-      yvalues,
-      ~{
-        lhs <- as.numeric((yvec == .x) & mindex)
-        .predict_mean(lhs_vec = lhs, df = df, d_var = d, d_val = 0,
-                      reg_formula = reg_formula, cluster = cluster, wvec = wvec)
-      }
-    )
-    
-    # positive part sum
-    sum(pmax(partial_pmf_1 - partial_pmf_0, 0))
-  })
-  
+  row_key <- function(mat) {
+    apply(mat, 1, function(row) paste(row, collapse = "\r"))
+  }
+  m_keys <- row_key(mdf)
+  mvalue_keys <- row_key(mvalues)
+  mvec <- match(m_keys, mvalue_keys)
+
+  # build the (y, m) grid expected by compute_regression_probs()
+  yvalues <- unique(yvec)
+  my_values <- base::expand.grid(
+    m = seq_len(nrow(mvalues)),
+    y = yvalues,
+    KEEP.OUT.ATTRS = FALSE,
+    stringsAsFactors = FALSE
+  )
+  my_values <- my_values[, c("y", "m")]
+
+  p_ym_0_vec <- compute_regression_probs(
+    df = df,
+    yvec = yvec,
+    mvec = mvec,
+    my_values = my_values,
+    d = d,
+    reg_formula = reg_formula,
+    transform_fun = control_transform
+  )
+
+  p_ym_1_vec <- compute_regression_probs(
+    df = df,
+    yvec = yvec,
+    mvec = mvec,
+    my_values = my_values,
+    d = d,
+    reg_formula = reg_formula,
+    transform_fun = treated_transform
+  )
+
+  positive_parts <- pmax(p_ym_1_vec - p_ym_0_vec, 0)
+  max_p_diffs <- vapply(
+    seq_len(nrow(mvalues)),
+    function(m_id) {
+      sum(positive_parts[my_values$m == m_id])
+    },
+    numeric(1)
+  )
+
   list(mvalues = mvalues,
        max_p_diffs = max_p_diffs)
-}
-
-
-
-
-# parse OLS/IV regression formula for fixest
-extract_iv <- function(reg_formula, d){
-  reg_str <- if (inherits(reg_formula, "formula")) {
-    paste(deparse(reg_formula), collapse = " ")
-  } else {
-    as.character(reg_formula)
-  }
-  reg_str <- trimws(sub("^~", "", reg_str))  # drop leading "~"
-  
-  # split by pipe if user left FE / etc (we ignore tail)
-  split_pipe <- strsplit(reg_str, "\\|", fixed = FALSE)[[1]]
-  rhs_main   <- trimws(split_pipe[1])
-  
-  # Initialize output
-  out <- list(is_iv    = FALSE,
-              treat    = d,
-              instr    = character(0),
-              controls = character(0),
-              added_treat  = FALSE)
-  
-  # detect "( ... = ... )"
-  if (grepl("\\([^)]*=[^)]*\\)", rhs_main)) {
-    # IV branch
-    out$is_iv <- TRUE
-    iv_part <- sub(".*\\(([^)]*)\\).*", "\\1", rhs_main)
-    sides   <- strsplit(iv_part, "=", fixed = TRUE)[[1]]
-    
-    out$treat <- trimws(unlist(strsplit(sides[1], "+", fixed = TRUE)))
-    out$instr <- trimws(unlist(strsplit(sides[2], "+", fixed = TRUE)))
-    
-    rhs_controls <- gsub("\\([^)]*\\)", "", rhs_main)
-    ctrls_raw    <- trimws(unlist(strsplit(rhs_controls, "+", fixed = TRUE)))
-    out$controls <- setdiff(ctrls_raw, c(out$treat, ""))
-    
-    # Enforce that the IV endogenous variable equals d
-    if (!all(out$treat == d)){
-      stop(
-        "In IV syntax, the endogenous treatment inside '(...=...)' must equal d = '",
-        d, "'."
-      )
-    }
-    
-  } else {
-    # OLS branch
-    vars <- trimws(unlist(strsplit(rhs_main, "+", fixed = TRUE)))
-    vars <- vars[nzchar(vars)]
-    out$controls <- setdiff(vars, d)
-    
-    # If user DID NOT include the treatment, we will auto-add it AND warn 
-    if (!any(vars == d)){
-      out$added_treat <- TRUE
-      warning(
-        "The treatment variable '", d, "' was not found in the provided reg_formula;",
-        "I have added it as a regressor. Please edit reg_formula if that was not your intention."
-      )
-    }
-  }
-  # Final sanity check
-  if (!d %in% c(out$treat, out$controls)) {
-    stop("Treatment variable '", d, "' not found in reg_formula. Please include it.")
-  }
-  out
 }
 
 
