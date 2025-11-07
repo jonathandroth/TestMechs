@@ -985,36 +985,42 @@ get_beta.obs_fn <- function(yvec, dvec, mvec, df, d, reg_formula = NULL, inequal
   if(!is.null(reg_formula)){
     #Use regression approach
     #Parse reg_formula to check for IV or covariates
-    iv_spec <- extract_iv(reg_formula, d)
+    #iv_spec <- extract_iv(reg_formula, d)
+
+    #XX should do some basic sanity checks on the regression spec here
+
     p_ym_0_vec <- numeric(nrow(my_values))
 
       for (j in 1:nrow(my_values)) {
+
         # Create indicator for current (y,m) combo
         df$lhs <- as.numeric(yvec == my_values$y[j] & mvec == my_values$m[j])
 
-       if (var(df$lhs) == 0) {                    # all-0 or all-1
-        p_ym_0_vec[j] <- df$lhs[1]               # 0 or 1; no regression
-        next                                      # move to next (y,m)
-      }else{
-      if (iv_spec$is_iv) {
-        ctrl  <- paste(iv_spec$controls, collapse = " + ")
-        instr <- paste(iv_spec$instr,     collapse = " + ")
+        #Interact indicator with (D-1)
+        # This is because treatment effect on (D-1)*Y is simply Y(0)
+        df$lhs <- (df[[d]]-1) * df$lhs
 
-        fml <- as.formula(sprintf("lhs ~ %s | %s ~ %s",
-                                  ctrl, iv_spec$treat, instr))
-      } else {
-        rhs <- paste(c(iv_spec$treat, iv_spec$controls), collapse = " + ")
-        fml <- as.formula(paste("lhs ~", rhs))
-      }
-      # estimate & predict
-      reg <- fixest::feols(fml, data = df)
-      # Predict under D=0
-      df_zero <- df
-      df_zero[[d]] <- 0
-      p_ym_0_vec[j] <- mean(predict(reg, newdata = df_zero))
+        #Check if LHS is constant (since if so, fixest throws an error)
+        #If so, we difference btwn treatmetn and control is zero, so report 0
+        if(var(df$lhs) == 0){
+          p_ym_0_vec[j] <- 0
+          next
+        }
+
+        fml <- stats::as.formula( base::paste("lhs", reg_formula) )
+
+        reg <- fixest::feols(fml = fml, data = df)
+
+        if( !is.null(reg$coefficients[[d]]) ){
+          p_ym_0_vec[j] <- reg$coefficients[[d]]
+        }else if( base::max( base::grepl(pattern = base::paste0(d," ="), x = names(reg$coefficients)) ) >0 ){
+          p_ym_0_vec[j] <- reg$coefficients[which(base::grepl(base::paste0(d," =")))]
+        }else{
+            stop("The treatment variable does not appear to be on the RHS of the provided reg_formula")
+          }
+
     }
-  }
-    } else {
+  } else {
       # Use original frequency approach (randomized D)
       p_ym_0_vec <- purrr::map_dbl(.x = 1:NROW(my_values),
                                    .f = ~mean(yvec[dvec == 0] == my_values$y[.x]
@@ -1033,37 +1039,36 @@ get_beta.obs_fn <- function(yvec, dvec, mvec, df, d, reg_formula = NULL, inequal
    if(!is.null(reg_formula)){
     #Use regression approach
     #Parse reg_formula to check for IV or covariates
-    iv_spec <- extract_iv(reg_formula, d)
+    #iv_spec <- extract_iv(reg_formula, d)
     p_ym_1_vec <- numeric(nrow(my_values))
 
     for (j in 1:nrow(my_values)) {
       # Create indicator for current (y,m) combo
       df$lhs <- as.numeric(yvec == my_values$y[j] & mvec == my_values$m[j])
 
-      if (var(df$lhs) == 0) {                    # all-0 or all-1
-        p_ym_0_vec[j] <- df$lhs[1]               # 0 or 1; no regression
-        next                                      # move to next (y,m)
+      #Interact indicator with D
+      # This is because treatment effect on D*Y is simply Y(1)
+      df$lhs <- df[[d]] * df$lhs
+
+      #Check if LHS is constant (since if so, fixest throws an error)
+      #If so, we difference btwn treatmetn and control is zero, so report 0
+      if(var(df$lhs) == 0){
+        p_ym_1_vec[j] <- 0
+        next
+      }
+
+      fml <- stats::as.formula( base::paste("lhs", reg_formula) )
+
+      reg <- fixest::feols(fml = fml, data = df)
+
+      if( !is.null(reg$coefficients[[d]]) ){
+        p_ym_1_vec[j] <- reg$coefficients[[d]]
+      }else if( base::max( base::grepl(pattern = base::paste0(d," ="), x = names(reg$coefficients)) ) >0 ){
+        p_ym_1_vec[j] <- reg$coefficients[which(base::grepl(base::paste0(d," =")))]
       }else{
-        if (iv_spec$is_iv) {
-          ctrl  <- paste(iv_spec$controls, collapse = " + ")
-          instr <- paste(iv_spec$instr,     collapse = " + ")
-
-          fml <- as.formula(sprintf("lhs ~ %s | %s ~ %s",
-                                    ctrl, iv_spec$treat, instr))
-        } else {
-          rhs <- paste(c(iv_spec$treat, iv_spec$controls), collapse = " + ")
-          fml <- as.formula(paste("lhs ~", rhs))
-        }
-        # estimate & predict
-        reg <- fixest::feols(fml, data = df)
-
-      # Predict under D=1
-      df_one <- df
-      df_one[[d]] <- 1
-      p_ym_1_vec[j] <- mean(predict(reg, newdata = df_one))
-    }
-  }
-  } else{
+        stop("The treatment variable does not appear to be on the RHS of the provided reg_formula")
+      }}
+    } else{
     # Use original frequency approach (randomized D)
     p_ym_1_vec <- purrr::map_dbl(.x = 1:NROW(my_values),
                                  .f = ~mean(yvec[dvec == 1] == my_values$y[.x]
@@ -1246,69 +1251,49 @@ get_IFs <- function(yvec, dvec, mvec, df, d, reg_formula = NULL, my_values, mval
     for(idx in 1:NROW(my_values)){
       df$lhs <- as.numeric(yvec == my_values$y[idx] & mvec == my_values$m[idx])
 
-      if (var(df$lhs) == 0) {                        # all-0 or all-1
-        # no regression needed: fitted value is the constant itself
-        mu0 <- df$lhs                                # 0 or 1 everywhere
-        mu1 <- df$lhs
-        p0  <- mean(mu0)                             # = 0 or 1
-        p1  <- p0
+      df$lhs0 <- (df[[d]] - 1) * df$lhs
+      df$lhs1 <- df[[d]] * df$lhs
 
-        # centered IFs: (mu – mean)
-        p_ym_0_centered_IFs[, idx] <- mu0 - p0
-        p_ym_1_centered_IFs[, idx] <- mu1 - p1
-
-        # non-centered (divide by n_d / n to mimic old scaling)
-        p_ym_0_noncentered_IFs[, idx] <- mu0 / (n0 / n)
-        p_ym_1_noncentered_IFs[, idx] <- mu1 / (n1 / n)
-        next                            # proceed to next (y,m) pair
+      if(var(df$lhs0) == 0){
+        p_ym_0_centered_IFs[, idx] <- 0
       }else{
-        iv_spec <- extract_iv(reg_formula, d)
-        if (iv_spec$is_iv) {
-          ctrl  <- paste(iv_spec$controls, collapse = " + ")
-          instr <- paste(iv_spec$instr,     collapse = " + ")
+        fml0 <- stats::as.formula( base::paste("lhs0", reg_formula) )
+        reg0 <- fixest::feols(fml = fml0, data = df)
 
-          fml <- as.formula(sprintf("lhs ~ %s | %s ~ %s",
-                                    ctrl, iv_spec$treat, instr))
-        } else {
-          rhs <- paste(c(iv_spec$treat, iv_spec$controls), collapse = " + ")
-          fml <- as.formula(paste("lhs ~", rhs))
+        S <- sandwich::estfun(reg0)  # n × p
+        B <- sandwich::bread(reg0)   # the “bread”; for OLS it corresponds to (X'X)^(-1) up to n-scaling
+        n <- nrow(S)
+
+        # Observation-level influence function (n × p)
+        IF <- (S %*% t(B))
+
+        if(d %in% colnames(IF)){
+          p_ym_0_centered_IFs[, idx] <- IF[, d]
+        }else if( base::max( base::grepl(pattern = base::paste0(d," ="), x = colnames(IF)) ) >0 ){
+          p_ym_0_centered_IFs[, idx] <- IF[, base::which(base::grepl(pattern = base::paste0(d," ="), x = colnames(IF)))]
         }
 
-        mod <- fixest::feols(fml, data = df)
+      }
 
-        # Identify IV vs OLS and build RHS basis on df (training basis)
-        is_iv <- !is.null(mod$iv_inst)
 
-        if (is_iv) {
-          Zmat  <- stats::model.matrix(mod, type = "iv.inst")   # n × q instruments
-          Xmat  <- stats::model.matrix(mod, type = "rhs")       # n × p regressors (RHS basis of the fitted model)
-          res   <- residuals(mod)                               # n
-          score <- Zmat * res                                   # n × q (rowwise multiply each z_i by e_i)
-          ZtXinv <- solve(crossprod(Zmat, Xmat) / n)            # (Z'X/n)^(-1)  (q × p)
-          IF_beta <- score %*% ZtXinv                           # n × p
-        } else {
-          Xmat   <- stats::model.matrix(mod, type = "rhs")      # n × p
-          res    <- residuals(mod)                              # n
-          score  <- Xmat * res                                  # n × p
-          XtXinv <- solve(crossprod(Xmat) / n)                  # (X'X/n)^(-1)
-          IF_beta <- score %*% XtXinv                           # n × p
-        }
+        if(var(df$lhs1) == 0){
+          p_ym_1_centered_IFs[, idx] <- 0
+        }else{
+          fml1 <- stats::as.formula( base::paste("lhs1", reg_formula) )
+          reg1 <- fixest::feols(fml = fml1, data = df)
 
-        mu0 <- stats::predict(mod, newdata = df0)
-        mu1 <- stats::predict(mod, newdata = df1)
-        p0  <- mean(mu0)
-        p1 <- mean(mu1)
+          S <- sandwich::estfun(reg1)  # n × p
+          B <- sandwich::bread(reg1)   # the “bread”; for OLS it corresponds to (X'X)^(-1) up to n-scaling
+          n <- nrow(S)
 
-        X0bar <- colMeans(stats::model.matrix(mod, df0))
-        X1bar <- colMeans(stats::model.matrix(mod, df1))
+          # Observation-level influence function (n × p)
+          IF <- (S %*% t(B))
 
-        # centred IFs via delta-method
-        p_ym_0_centered_IFs[, idx] <- (mu0 - p0) + as.numeric(IF_beta %*% X0bar)
-        p_ym_1_centered_IFs[, idx] <- (mu1 - p1) + as.numeric(IF_beta %*% X1bar)
-
-        # non-centered
-        p_ym_0_noncentered_IFs[,idx] <- mu0 / (n0/n)
-        p_ym_1_noncentered_IFs[,idx] <- mu1 / (n1/n)
+          if(d %in% colnames(IF)){
+            p_ym_1_centered_IFs[, idx] <- IF[, d]
+          }else if( base::max( base::grepl(pattern = base::paste0(d," ="), x = colnames(IF)) ) >0 ){
+            p_ym_1_centered_IFs[, idx] <- IF[, base::which(base::grepl(pattern = base::paste0(d," ="), x = colnames(IF)))]
+          }
 
       }
     }
@@ -1327,14 +1312,7 @@ get_IFs <- function(yvec, dvec, mvec, df, d, reg_formula = NULL, my_values, mval
 
 
   if (inequalities_only) {
-    #Duplicate the first two sets of rows with opposite signs
-    # to cast equalities as inequalities
-    beta.obs_noncentered_IFs <- cbind(
-      p_m_0_noncentered_IFs,
-      p_m_1_noncentered_IFs,
-      -p_m_0_noncentered_IFs,
-      -p_m_1_noncentered_IFs,
-      p_ym_1_noncentered_IFs - p_ym_0_noncentered_IFs)
+
 
     beta.obs_centered_IFs <- cbind(
       p_m_0_centered_IFs,
@@ -1343,11 +1321,6 @@ get_IFs <- function(yvec, dvec, mvec, df, d, reg_formula = NULL, my_values, mval
       -p_m_1_centered_IFs,
       p_ym_1_centered_IFs - p_ym_0_centered_IFs)
   } else {
-    beta.obs_noncentered_IFs <- cbind(
-      p_m_0_noncentered_IFs,
-      p_m_1_noncentered_IFs,
-      p_ym_1_noncentered_IFs - p_ym_0_noncentered_IFs)
-
 
     beta.obs_centered_IFs <- cbind(
       p_m_0_centered_IFs,
@@ -1361,15 +1334,11 @@ get_IFs <- function(yvec, dvec, mvec, df, d, reg_formula = NULL, my_values, mval
                   cbind((p_ym_0_centered_IFs - p_ym_1_centered_IFs)[,1:num_yvals], (p_ym_1_centered_IFs - p_ym_0_centered_IFs)[,(num_yvals+1):(2*num_yvals)])))
   }
 
-  return(list(beta.obs_noncentered_IFs = beta.obs_noncentered_IFs,
+  return(list(
               beta.obs_centered_IFs = beta.obs_centered_IFs,
-              p_ym_0_noncentered_IFs = p_ym_0_noncentered_IFs,
               p_ym_0_centered_IFs = p_ym_0_centered_IFs,
-              p_ym_1_noncentered_IFs = p_ym_1_noncentered_IFs,
               p_ym_1_centered_IFs = p_ym_1_centered_IFs,
-              p_m_0_noncentered_IFs = p_m_0_noncentered_IFs,
               p_m_0_centered_IFs = p_m_0_centered_IFs,
-              p_m_1_noncentered_IFs = p_m_1_noncentered_IFs,
               p_m_1_centered_IFs = p_m_1_centered_IFs
   ))
 
