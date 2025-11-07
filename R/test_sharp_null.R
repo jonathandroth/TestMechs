@@ -1011,10 +1011,10 @@ get_beta.obs_fn <- function(yvec, dvec, mvec, df, d, reg_formula = NULL, inequal
 
         reg <- fixest::feols(fml = fml, data = df)
 
-        if( !is.null(reg$coefficients[[d]]) ){
-          p_ym_0_vec[j] <- reg$coefficients[[d]]
-        }else if( base::max( base::grepl(pattern = base::paste0(d," ="), x = names(reg$coefficients)) ) >0 ){
-          p_ym_0_vec[j] <- reg$coefficients[which(base::grepl(base::paste0(d," =")))]
+        if( d %in% rownames(reg$coeftable) ){
+          p_ym_0_vec[j] <- reg$coeftable[d,"Estimate"]
+        }else if( base::max( base::grepl(pattern = base::paste0(d," ="), x = rownames(reg$coeftable)) ) >0 ){
+          p_ym_0_vec[j] <- reg$coeftable[which(base::grepl(base::paste0(d," ="),x = rownames(reg$coeftable) )), "Estimate"]
         }else{
             stop("The treatment variable does not appear to be on the RHS of the provided reg_formula")
           }
@@ -1061,14 +1061,15 @@ get_beta.obs_fn <- function(yvec, dvec, mvec, df, d, reg_formula = NULL, inequal
 
       reg <- fixest::feols(fml = fml, data = df)
 
-      if( !is.null(reg$coefficients[[d]]) ){
-        p_ym_1_vec[j] <- reg$coefficients[[d]]
-      }else if( base::max( base::grepl(pattern = base::paste0(d," ="), x = names(reg$coefficients)) ) >0 ){
-        p_ym_1_vec[j] <- reg$coefficients[which(base::grepl(base::paste0(d," =")))]
+      if( d %in% rownames(reg$coeftable) ){
+        p_ym_1_vec[j] <- reg$coeftable[d,"Estimate"]
+      }else if( base::max( base::grepl(pattern = base::paste0(d," ="), x = rownames(reg$coeftable)) ) >0 ){
+        p_ym_1_vec[j] <- reg$coeftable[which(base::grepl(base::paste0(d," ="),x = rownames(reg$coeftable) )), "Estimate"]
       }else{
         stop("The treatment variable does not appear to be on the RHS of the provided reg_formula")
-      }}
-    } else{
+      }
+
+      }} else{
     # Use original frequency approach (randomized D)
     p_ym_1_vec <- purrr::map_dbl(.x = 1:NROW(my_values),
                                  .f = ~mean(yvec[dvec == 1] == my_values$y[.x]
