@@ -979,6 +979,79 @@ construct_Aobs_Ashp_betashp <- function(yvec,
 
 
 # Constructing beta_obs
+find_treatment_position <- function(name_vec, d) {
+  if (d %in% name_vec) {
+    return(match(d, name_vec))
+  }
+
+  matches <- grepl(paste0(d, " ="), name_vec, fixed = FALSE)
+  if (any(matches)) {
+    return(which(matches)[1])
+  }
+
+  stop("The treatment variable does not appear to be on the RHS of the provided reg_formula")
+}
+
+run_feols_with_treatment <- function(df, lhs_name, reg_formula, d) {
+  fml <- stats::as.formula(paste(lhs_name, reg_formula))
+  reg <- fixest::feols(fml = fml, data = df)
+  list(
+    reg = reg,
+    treat_idx = find_treatment_position(rownames(reg$coeftable), d)
+  )
+}
+
+compute_regression_probs <- function(df, yvec, mvec, my_values, d, reg_formula, transform_fun) {
+  purrr::map_dbl(seq_len(nrow(my_values)), function(j) {
+    lhs_name <- "lhs_tmp"
+    df[[lhs_name]] <- transform_fun(as.numeric(yvec == my_values$y[j] & mvec == my_values$m[j]),
+                                    df[[d]])
+
+    lhs_var <- stats::var(df[[lhs_name]])
+    if (is.na(lhs_var) || lhs_var == 0) {
+      return(0)
+    }
+
+    reg_out <- run_feols_with_treatment(df, lhs_name, reg_formula, d)
+    reg_out$reg$coeftable[reg_out$treat_idx, "Estimate"]
+  })
+}
+
+compute_regression_ifs <- function(df, yvec, mvec, my_values, d, reg_formula, transform_fun) {
+  n <- nrow(df)
+  out <- matrix(0, nrow = n, ncol = nrow(my_values))
+
+  for (idx in seq_len(nrow(my_values))) {
+    lhs_name <- "lhs_tmp"
+    df[[lhs_name]] <- transform_fun(as.numeric(yvec == my_values$y[idx] & mvec == my_values$m[idx]),
+                                    df[[d]])
+
+    lhs_var <- stats::var(df[[lhs_name]])
+    if (is.na(lhs_var) || lhs_var == 0) {
+      next
+    }
+
+    reg_out <- run_feols_with_treatment(df, lhs_name, reg_formula, d)
+
+    S <- sandwich::estfun(reg_out$reg)
+    B <- sandwich::bread(reg_out$reg)
+    IF <- (S %*% t(B))
+
+    treat_pos <- find_treatment_position(colnames(IF), d)
+    out[, idx] <- IF[, treat_pos]
+  }
+
+  out
+}
+
+control_transform <- function(lhs, d_vals) {
+  (d_vals - 1) * lhs
+}
+
+treated_transform <- function(lhs, d_vals) {
+  d_vals * lhs
+}
+
 get_beta.obs_fn <- function(yvec, dvec, mvec, df, d, reg_formula = NULL, inequalities_only,
                             yvalues, mvalues, my_values, rearrange = FALSE) {
   #Get frequencies for all possible values of (y,m) | D=0
@@ -989,37 +1062,7 @@ get_beta.obs_fn <- function(yvec, dvec, mvec, df, d, reg_formula = NULL, inequal
 
     #XX should do some basic sanity checks on the regression spec here
 
-    p_ym_0_vec <- numeric(nrow(my_values))
-
-      for (j in 1:nrow(my_values)) {
-
-        # Create indicator for current (y,m) combo
-        df$lhs <- as.numeric(yvec == my_values$y[j] & mvec == my_values$m[j])
-
-        #Interact indicator with (D-1)
-        # This is because treatment effect on (D-1)*Y is simply Y(0)
-        df$lhs <- (df[[d]]-1) * df$lhs
-
-        #Check if LHS is constant (since if so, fixest throws an error)
-        #If so, we difference btwn treatmetn and control is zero, so report 0
-        if(var(df$lhs) == 0){
-          p_ym_0_vec[j] <- 0
-          next
-        }
-
-        fml <- stats::as.formula( base::paste("lhs", reg_formula) )
-
-        reg <- fixest::feols(fml = fml, data = df)
-
-        if( d %in% rownames(reg$coeftable) ){
-          p_ym_0_vec[j] <- reg$coeftable[d,"Estimate"]
-        }else if( base::max( base::grepl(pattern = base::paste0(d," ="), x = rownames(reg$coeftable)) ) >0 ){
-          p_ym_0_vec[j] <- reg$coeftable[which(base::grepl(base::paste0(d," ="),x = rownames(reg$coeftable) )), "Estimate"]
-        }else{
-            stop("The treatment variable does not appear to be on the RHS of the provided reg_formula")
-          }
-
-    }
+    p_ym_0_vec <- compute_regression_probs(df, yvec, mvec, my_values, d, reg_formula, control_transform)
   } else {
       # Use original frequency approach (randomized D)
       p_ym_0_vec <- purrr::map_dbl(.x = 1:NROW(my_values),
@@ -1040,36 +1083,8 @@ get_beta.obs_fn <- function(yvec, dvec, mvec, df, d, reg_formula = NULL, inequal
     #Use regression approach
     #Parse reg_formula to check for IV or covariates
     #iv_spec <- extract_iv(reg_formula, d)
-    p_ym_1_vec <- numeric(nrow(my_values))
-
-    for (j in 1:nrow(my_values)) {
-      # Create indicator for current (y,m) combo
-      df$lhs <- as.numeric(yvec == my_values$y[j] & mvec == my_values$m[j])
-
-      #Interact indicator with D
-      # This is because treatment effect on D*Y is simply Y(1)
-      df$lhs <- df[[d]] * df$lhs
-
-      #Check if LHS is constant (since if so, fixest throws an error)
-      #If so, we difference btwn treatmetn and control is zero, so report 0
-      if(var(df$lhs) == 0){
-        p_ym_1_vec[j] <- 0
-        next
-      }
-
-      fml <- stats::as.formula( base::paste("lhs", reg_formula) )
-
-      reg <- fixest::feols(fml = fml, data = df)
-
-      if( d %in% rownames(reg$coeftable) ){
-        p_ym_1_vec[j] <- reg$coeftable[d,"Estimate"]
-      }else if( base::max( base::grepl(pattern = base::paste0(d," ="), x = rownames(reg$coeftable)) ) >0 ){
-        p_ym_1_vec[j] <- reg$coeftable[which(base::grepl(base::paste0(d," ="),x = rownames(reg$coeftable) )), "Estimate"]
-      }else{
-        stop("The treatment variable does not appear to be on the RHS of the provided reg_formula")
-      }
-
-      }} else{
+    p_ym_1_vec <- compute_regression_probs(df, yvec, mvec, my_values, d, reg_formula, treated_transform)
+      } else{
     # Use original frequency approach (randomized D)
     p_ym_1_vec <- purrr::map_dbl(.x = 1:NROW(my_values),
                                  .f = ~mean(yvec[dvec == 1] == my_values$y[.x]
@@ -1244,61 +1259,8 @@ get_IFs <- function(yvec, dvec, mvec, df, d, reg_formula = NULL, my_values, mval
 
   } else{
     # Non_experimental design
-    df0 <- df
-    df0[[d]] <- 0    # all units set to control
-    df1 <- df
-    df1[[d]] <- 1    # all units set to treated
-
-    for(idx in 1:NROW(my_values)){
-      df$lhs <- as.numeric(yvec == my_values$y[idx] & mvec == my_values$m[idx])
-
-      df$lhs0 <- (df[[d]] - 1) * df$lhs
-      df$lhs1 <- df[[d]] * df$lhs
-
-      if(var(df$lhs0) == 0){
-        p_ym_0_centered_IFs[, idx] <- 0
-      }else{
-        fml0 <- stats::as.formula( base::paste("lhs0", reg_formula) )
-        reg0 <- fixest::feols(fml = fml0, data = df)
-
-        S <- sandwich::estfun(reg0)  # n × p
-        B <- sandwich::bread(reg0)   # the “bread”; for OLS it corresponds to (X'X)^(-1) up to n-scaling
-        n <- nrow(S)
-
-        # Observation-level influence function (n × p)
-        IF <- (S %*% t(B))
-
-        if(d %in% colnames(IF)){
-          p_ym_0_centered_IFs[, idx] <- IF[, d]
-        }else if( base::max( base::grepl(pattern = base::paste0(d," ="), x = colnames(IF)) ) >0 ){
-          p_ym_0_centered_IFs[, idx] <- IF[, base::which(base::grepl(pattern = base::paste0(d," ="), x = colnames(IF)))]
-        }
-
-      }
-
-
-        if(var(df$lhs1) == 0){
-          p_ym_1_centered_IFs[, idx] <- 0
-        }else{
-          fml1 <- stats::as.formula( base::paste("lhs1", reg_formula) )
-          reg1 <- fixest::feols(fml = fml1, data = df)
-
-          S <- sandwich::estfun(reg1)  # n × p
-          B <- sandwich::bread(reg1)   # the “bread”; for OLS it corresponds to (X'X)^(-1) up to n-scaling
-          n <- nrow(S)
-
-          # Observation-level influence function (n × p)
-          IF <- (S %*% t(B))
-
-          if(d %in% colnames(IF)){
-            p_ym_1_centered_IFs[, idx] <- IF[, d]
-          }else if( base::max( base::grepl(pattern = base::paste0(d," ="), x = colnames(IF)) ) >0 ){
-            p_ym_1_centered_IFs[, idx] <- IF[, base::which(base::grepl(pattern = base::paste0(d," ="), x = colnames(IF)))]
-          }
-
-      }
-    }
-
+    p_ym_0_centered_IFs <- compute_regression_ifs(df, yvec, mvec, my_values, d, reg_formula, control_transform)
+    p_ym_1_centered_IFs <- compute_regression_ifs(df, yvec, mvec, my_values, d, reg_formula, treated_transform)
 
     for (i in 1:k){
       idx <- which(my_values$m == mvalues[i])
