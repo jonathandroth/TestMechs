@@ -87,7 +87,7 @@ trimmed_expectation_from_cdf <- function(ecdf_table,
 #' @param m Name of the mediator variable
 #' @param y Name of the outcome variable
 #' @param at_group The AT group of interest. Default is 1, so we compute means for units with M(1)=M(0)=1.
-#' @param max_defiers_share Bound on the proportion of defiers in the population. Default is 0 which indicates that the monotonicity constraint is imposed.
+#' @param max_defier_share Bound on the proportion of defiers in the population. Default is 0 which indicates that the monotonicity constraint is imposed.
 #' @param num_gridpoints (Optional.) The number of gridpoints used in evaluating the integral. Higher is more accurate but more computationally costly
 #' @importFrom "stats" "quantile"
 #' @export
@@ -358,7 +358,7 @@ compute_bounds_ats_new <- function(df,
                                     defiers_constraints_matrix)
   
   #Combine the constants associated with the matrices
-  rhs_vec <- c(p_m_1, p_m_0, max_p_diffs, max_defiers_share)
+  rhs_vec <- c(p_m_1, p_m_0, max_p_diffs, max_defier_share)
   
   #Specify the direction of the equalities/inequalities
   dir <- c(rep("==", 2*NROW(m1_marginals_constraints_matrix)),
