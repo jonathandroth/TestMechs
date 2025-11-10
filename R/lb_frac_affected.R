@@ -131,25 +131,49 @@ lb_frac_affected <- function(df,
     #m1_types <- m1_types[monotonic_types,]
 
 
-    #Compute the marginal distribution of M among D=1
-    p_m_1_fn <- function(mvalue){
-      mdf1 <- mdf[dvec ==1, , drop = FALSE]
-      M_equals_mvalue <- sapply(1:NROW(mdf1), function(i){all(mdf1[i,]==mvalue)} )
-      return(stats::weighted.mean( x = M_equals_mvalue,
-                                   w = wvec[dvec == 1]/sum(wvec[dvec == 1])))
+    if (!is.null(reg_formula) &&
+        !identical(as.character(reg_formula), "~ treat") &&
+        !continuous_Y) {
+      my_values <- max_p_diffs_list$my_values
+      p_ym_1_vec <- max_p_diffs_list$p_ym_1_vec
+      p_ym_0_vec <- max_p_diffs_list$p_ym_0_vec
+
+      p_m_1 <- vapply(
+        seq_len(nrow(mvalues)),
+        function(m_id) {
+          sum(p_ym_1_vec[my_values$m == m_id])
+        },
+        numeric(1)
+      )
+
+      p_m_0 <- vapply(
+        seq_len(nrow(mvalues)),
+        function(m_id) {
+          sum(p_ym_0_vec[my_values$m == m_id])
+        },
+        numeric(1)
+      )
+    } else {
+      #Compute the marginal distribution of M among D=1
+      p_m_1_fn <- function(mvalue){
+        mdf1 <- mdf[dvec ==1, , drop = FALSE]
+        M_equals_mvalue <- sapply(1:NROW(mdf1), function(i){all(mdf1[i,]==mvalue)} )
+        return(stats::weighted.mean( x = M_equals_mvalue,
+                                     w = wvec[dvec == 1]/sum(wvec[dvec == 1])))
+      }
+
+      p_m_1 <- base::apply(mvalues,1, p_m_1_fn)
+
+      #Compute the marginal distribution of M among D=0
+      p_m_0_fn <- function(mvalue){
+        mdf0 <- mdf[dvec ==0, , drop = FALSE]
+        M_equals_mvalue <- sapply(1:NROW(mdf0), function(i){all(mdf0[i,]==mvalue)} )
+        return(stats::weighted.mean( x = M_equals_mvalue,
+                                     w = wvec[dvec == 0]/sum(wvec[dvec == 0])))
+      }
+
+      p_m_0 <- base::apply(mvalues,1, p_m_0_fn)
     }
-
-    p_m_1 <- base::apply(mvalues,1, p_m_1_fn)
-
-    #Compute the marginal distribution of M among D=0
-    p_m_0_fn <- function(mvalue){
-      mdf0 <- mdf[dvec ==0, , drop = FALSE]
-      M_equals_mvalue <- sapply(1:NROW(mdf0), function(i){all(mdf0[i,]==mvalue)} )
-      return(stats::weighted.mean( x = M_equals_mvalue,
-                                   w = wvec[dvec == 0]/sum(wvec[dvec == 0])))
-    }
-
-    p_m_0 <- base::apply(mvalues,1, p_m_0_fn)
 
     ## We now calculate lower bounds on TV using either the group provided, or averaging across groups proportionally to share
     ## We consider an optimization where the first part of the optimization vector corresponds to the shares of complier types
@@ -579,8 +603,13 @@ compute_max_p_difference_reg <- function(dvec,
     numeric(1)
   )
 
-  list(mvalues = mvalues,
-       max_p_diffs = max_p_diffs)
+  list(
+    mvalues = mvalues,
+    max_p_diffs = max_p_diffs,
+    my_values = my_values,
+    p_ym_0_vec = p_ym_0_vec,
+    p_ym_1_vec = p_ym_1_vec
+  )
 }
 
 
