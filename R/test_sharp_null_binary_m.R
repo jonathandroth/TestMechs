@@ -136,24 +136,34 @@ test_sharp_null_binary_m <- function(df,
   }
   
   
-  ## Bootstrap the betas
-  beta.obs_list <- compute_bootstrap_draws_clustered(f =
-                                                       function(df,d,y,m,...){get_beta.obs(
-                                                         df[[y]],
-                                                         df[[d]],
-                                                         df[[m]],
-                                                         df,
-                                                         d,
-                                                         yvalues,
-                                                         reg_formula = reg_formula)},
-                                                     df = df,
-                                                     d = d,
-                                                     m = m,
-                                                     y = y,
-                                                     cluster = cluster,
-                                                     numdraws = B,
-                                                     fix_n1 = fix_n1,
-                                                     return_df = F)
+  ## Bootstrap the betas (computed lazily when needed)
+  beta.obs_list <- NULL
+  get_bootstrap_draws <- function() {
+    if (is.null(beta.obs_list)) {
+      beta.obs_list <<- compute_bootstrap_draws_clustered(
+        f = function(df, d, y, m, ...) {
+          get_beta.obs(
+            df[[y]],
+            df[[d]],
+            df[[m]],
+            df,
+            d,
+            yvalues,
+            reg_formula = reg_formula
+          )
+        },
+        df = df,
+        d = d,
+        m = m,
+        y = y,
+        cluster = cluster,
+        numdraws = B,
+        fix_n1 = fix_n1,
+        return_df = F
+      )
+    }
+    beta.obs_list
+  }
   
   ## Get beta.obs using actual data
   beta.obs <- get_beta.obs(yvec, dvec, mvec, df, d, yvalues, reg_formula)
@@ -176,12 +186,14 @@ test_sharp_null_binary_m <- function(df,
                                      exploit_binary_m = TRUE)
       
       if (method == "CS" & print_both_var) {
+        beta.obs_list <- get_bootstrap_draws()
         sigma.obs_boot <- stats::cov(base::Reduce(base::rbind,
                                                   beta.obs_list))
         print(sigma.obs)
         print(sigma.obs_boot)
       }
     } else {
+      beta.obs_list <- get_bootstrap_draws()
       sigma.obs <- stats::cov(base::Reduce(base::rbind,
                                            beta.obs_list))
     }
@@ -191,9 +203,10 @@ test_sharp_null_binary_m <- function(df,
   
   ## Run the respective tests
   if (method == "FSST") {
+    beta.obs_list <- get_bootstrap_draws()
     # Join beta.obs from actual and boostrapped data
     beta.obs_FSST <- c(list(beta.obs), beta.obs_list)
-    
+
     # Get variance matrix of the beta.obs bootsraps
     sigma.obs <- stats::cov(base::Reduce(base::rbind,
                                          beta.obs_list))
