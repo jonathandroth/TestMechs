@@ -87,7 +87,7 @@ lb_frac_affected <- function(df,
     wvec <- df[[w]]
   }
 
-  if(is.null(reg_formula) || identical(as.character(reg_formula), "~ treat") || continuous_Y){
+  if(is.null(reg_formula) || continuous_Y){
   max_p_diffs_list <- compute_max_p_difference(dvec = dvec,
                                                mdf = mdf,
                                                yvec = yvec,
@@ -132,7 +132,6 @@ lb_frac_affected <- function(df,
 
 
     if (!is.null(reg_formula) &&
-        !identical(as.character(reg_formula), "~ treat") &&
         !continuous_Y) {
       my_values <- max_p_diffs_list$my_values
       p_ym_1_vec <- max_p_diffs_list$p_ym_1_vec
