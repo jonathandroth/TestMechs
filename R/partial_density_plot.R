@@ -234,26 +234,6 @@ compute_partial_densities_and_shares <- function(df,
         stop("reg_formula is only allowed when Y is discrete (set continuous_Y = FALSE or supply num_Ybins).")
       }else{
 
-        ensure_treatment_term <- function(fml, treat_var) {
-          fml_chr <- paste(deparse(fml), collapse = " ")
-          treat_pattern <- paste0("\\b", treat_var, "\\b")
-          if (!grepl(treat_pattern, fml_chr)) {
-            warning("The treatment variable '", treat_var,
-                    "' was not found in the provided reg_formula; ",
-                    "I have added it as a regressor. Please edit reg_formula if that was not your intention.")
-            rhs_chr <- sub("^~", "", fml_chr)
-            if (nzchar(rhs_chr)) {
-              fml_chr <- paste("~", treat_var, "+", rhs_chr)
-            } else {
-              fml_chr <- paste("~", treat_var)
-            }
-            fml <- as.formula(fml_chr)
-          }
-          fml
-        }
-
-        reg_formula <- ensure_treatment_term(reg_formula, d)
-
         yvalues <- sort(unique(yvec))
         mvalues <- unique(mvec)
         my_values <- purrr::cross_df(list(m = mvalues, y = yvalues)) %>%

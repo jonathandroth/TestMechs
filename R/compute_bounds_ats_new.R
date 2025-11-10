@@ -135,28 +135,6 @@ compute_bounds_ats_new <- function(df,
                                m = m,
                                y = y)
 
-  ensure_treatment_term <- function(fml, treat_var) {
-    fml_chr <- paste(deparse(fml), collapse = " ")
-    treat_pattern <- paste0("\\b", treat_var, "\\b")
-    if (!grepl(treat_pattern, fml_chr)) {
-      warning("The treatment variable '", treat_var,
-              "' was not found in the provided reg_formula; ",
-              "I have added it as a regressor. Please edit reg_formula if that was not your intention.")
-      rhs_chr <- sub("^~", "", fml_chr)
-      if (nzchar(rhs_chr)) {
-        fml_chr <- paste("~", treat_var, "+", rhs_chr)
-      } else {
-        fml_chr <- paste("~", treat_var)
-      }
-      fml <- as.formula(fml_chr)
-    }
-    fml
-  }
-
-  if (!is.null(reg_formula)) {
-    reg_formula <- ensure_treatment_term(reg_formula, d)
-  }
-
   yvec <- df[[y]]
   dvec <- df[[d]]
   mvec <- df[[m]]
@@ -435,15 +413,16 @@ compute_bounds_ats_new <- function(df,
     .f = ~.row_equals(mvalues[.x, , drop = FALSE], at_group)
   ))
 
+  if (!length(at_group_index)) {
+    warning("The requested at_group does not appear in the mediator support; returning NA bounds.")
+    return(data.frame(lb = NA_real_, ub = NA_real_))
+  }
+
   # Replace shares: θ_{kk}^{min} / P(M=k | D=d)
   if (is.null(reg_formula)) {
     p_mk_d1 <- mean(mvec[dvec == 1] == at_group)
     p_mk_d0 <- mean(mvec[dvec == 0] == at_group)
   } else {
-    if (!length(at_group_index)) {
-      warning("The requested at_group does not appear in the mediator support; returning NA bounds.")
-      return(data.frame(lb = NA_real_, ub = NA_real_))
-    }
     p_mk_d1 <- p_m_1[at_group_index]
     p_mk_d0 <- p_m_0[at_group_index]
   }
