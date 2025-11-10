@@ -527,10 +527,13 @@ compute_max_p_difference_reg <- function(dvec,
   mdf  <- mdf[keep_rows, , drop = FALSE]
   df   <- df[keep_rows, , drop = FALSE]
 
-  # create a univariate representation of the mediator patterns so we can reuse
-  # the regression helpers defined in test_sharp_null.R
+  # The regression helpers operate on a single integer-coded mediator. When the
+  # mediator is multivariate, we collapse each row to a string "key" and use it
+  # to map every observation onto the index of its unique mediator pattern.
   mvalues <- unique(mdf)
   row_key <- function(mat) {
+    # use "\r" as a separator because it is unlikely to appear in factor names
+    # or numeric representations, which prevents accidental key collisions
     apply(mat, 1, function(row) paste(row, collapse = "\r"))
   }
   m_keys <- row_key(mdf)
