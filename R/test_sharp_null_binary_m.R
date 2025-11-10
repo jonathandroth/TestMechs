@@ -24,7 +24,6 @@
 #'  @param lambda (For FSST only) A string variable, either dd or ndd, standing for data-driven or non-data driven respectively.
 #'  @param analytic_variance (For CS or ARP only) A flag indicating whether to use analytic variance.
 #'  @param refinement (For CS only, optional) If TRUE, use the refined Cox & Shi test (rCC rather than CC). Default is FALSE.
-#'  @param print_both_var (For CS only, Optional) If TRUE, print sigma from both actual and bootstrapped data.
 #' @export
 
 test_sharp_null_binary_m <- function(df,
@@ -45,8 +44,7 @@ test_sharp_null_binary_m <- function(df,
                                      fix_n1 = T,
                                      lambda = "dd",    #fsst arg
                                      analytic_variance = FALSE,    # arp cs arg
-                                     refinement = FALSE,    #cs arg
-                                     print_both_var = FALSE    #cs arg
+                                     refinement = FALSE    #cs arg
                                      ){
   
   ## Remove missing
@@ -185,13 +183,6 @@ test_sharp_null_binary_m <- function(df,
                                      clustervec = clustervec,
                                      exploit_binary_m = TRUE)
       
-      if (method == "CS" & print_both_var) {
-        beta.obs_list <- get_bootstrap_draws()
-        sigma.obs_boot <- stats::cov(base::Reduce(base::rbind,
-                                                  beta.obs_list))
-        print(sigma.obs)
-        print(sigma.obs_boot)
-      }
     } else {
       beta.obs_list <- get_bootstrap_draws()
       sigma.obs <- stats::cov(base::Reduce(base::rbind,

@@ -22,8 +22,7 @@ test_sharp_null_binary_m(
   fix_n1 = T,
   lambda = "dd",
   analytic_variance = FALSE,
-  refinement = FALSE,
-  print_both_var = FALSE
+  refinement = FALSE
 )
 }
 \arguments{
@@ -54,8 +53,7 @@ ordering is used.}
 @param fix_n1 Whether the number of treated units (or clusters) should be fixed in the bootstrap
 @param lambda (For FSST only) A string variable, either dd or ndd, standing for data-driven or non-data driven respectively.
 @param analytic_variance (For CS or ARP only) A flag indicating whether to use analytic variance.
-@param refinement (For CS only, optional) If TRUE, use the refined Cox & Shi test (rCC rather than CC). Default is FALSE.
-@param print_both_var (For CS only, Optional) If TRUE, print sigma from both actual and bootstrapped data.}
+@param refinement (For CS only, optional) If TRUE, use the refined Cox & Shi test (rCC rather than CC). Default is FALSE.}
 }
 \description{
 This function tests the sharp null of Y(1,m) = Y(0,m). The
