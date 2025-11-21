@@ -24,8 +24,6 @@
 #'  @param lambda (For FSST only) A string variable, either dd or ndd, standing for data-driven or non-data driven respectively.
 #'  @param analytic_variance (For CS or ARP only) A flag indicating whether to use analytic variance.
 #'  @param refinement (For CS only, optional) If TRUE, use the refined Cox & Shi test (rCC rather than CC). Default is FALSE.
-#' @export
-
 test_sharp_null_binary_m <- function(df,
                                      d,
                                      m,

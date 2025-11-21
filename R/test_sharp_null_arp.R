@@ -18,7 +18,6 @@
 #'   are "diag", "avar", "identity." Defaults is "diag" as in FSST.
 #' @param num_Ybins (Optional) If specified, Y is discretized into the given number of bins (if num_Ybins is larger than the number of unique values of Y, no changes are made)
 #' @param alpha Significance level. Default is 0.05
-#' @export
 test_sharp_null_arp <- function(df,
                             d,
                             m,

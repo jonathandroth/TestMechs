@@ -17,10 +17,9 @@
 #' @param weight.matrix Weight matrix used to implement FSST. Possible options
 #'   are "diag", "avar", "identity." Defaults is "diag" as in FSST.
 #' @param num_Ybins (Optional) If specified, Y is discretized into the given number of bins (if num_Ybins is larger than the number of unique values of Y, no changes are made)
-#' @export
 test_sharp_null_fsst_binary_m <- function(df,
-                                          d,
-                                          m,
+                                         d,
+                                         m,
                                           y,
                                           ordering = NULL,
                                           B = 500,
