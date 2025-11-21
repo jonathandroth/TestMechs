@@ -87,7 +87,7 @@ trimmed_expectation_from_cdf <- function(ecdf_table,
 #' @param m Name of the mediator variable
 #' @param y Name of the outcome variable
 #' @param at_group The AT group of interest. Default is 1, so we compute means for units with M(1)=M(0)=1.
-#' @param max_defiers_share Bound on the proportion of defiers in the population. Default is 0 which indicates that the monotonicity constraint is imposed.
+#' @param max_defier_share Bound on the proportion of defiers in the population. Default is 0 which indicates that the monotonicity constraint is imposed.
 #' @param num_gridpoints (Optional.) The number of gridpoints used in evaluating the integral. Higher is more accurate but more computationally costly
 #' @importFrom "stats" "quantile"
 #' @export
@@ -228,20 +228,23 @@ compute_bounds_ats_new <- function(df,
   
   defier_types <- 1-monotonic_types
   
-  #Compute the marginal distribution of M among D=1
-  p_m_1_fn <- function(mvalue){
-    mdf1 <- mdf[dvec == 1,, drop = FALSE]
-    M_equals_mvalue <- base::sapply(1:NROW(mdf1), function(i) .row_equals(mdf1[i,], mvalue))
-    mean(M_equals_mvalue)
+  if (is.null(reg_formula)) {
+    p_m_1_fn <- function(mvalue){
+      mdf1 <- mdf[dvec == 1,, drop = FALSE]
+      M_equals_mvalue <- base::sapply(1:NROW(mdf1), function(i) .row_equals(mdf1[i,], mvalue))
+      mean(M_equals_mvalue)
+    }
+    p_m_0_fn <- function(mvalue){
+      mdf0 <- mdf[dvec == 0, , drop = FALSE]
+      M_equals_mvalue <- base::sapply(1:NROW(mdf0), function(i) .row_equals(mdf0[i,], mvalue))
+      mean(M_equals_mvalue)
+    }
+
+    p_m_1 <- base::apply(mvalues, 1, p_m_1_fn)
+    p_m_0 <- base::apply(mvalues, 1, p_m_0_fn)
+  } else {
+    p_m_1 <- p_m_0 <- rep(NA_real_, nrow(mvalues))
   }
-  p_m_0_fn <- function(mvalue){
-    mdf0 <- mdf[dvec == 0, , drop = FALSE]
-    M_equals_mvalue <- base::sapply(1:NROW(mdf0), function(i) .row_equals(mdf0[i,], mvalue))
-    mean(M_equals_mvalue)
-  }
-  
-  p_m_1 <- base::apply(mvalues, 1, p_m_1_fn)
-  p_m_0 <- base::apply(mvalues, 1, p_m_0_fn)
   
 
   
@@ -252,6 +255,8 @@ compute_bounds_ats_new <- function(df,
   is_discrete_Y <- !( n / length(unique(df[[y]])) <= 30 )
   
   
+  regression_probs <- NULL
+
   if (is.null(reg_formula)) {
     max_p_diffs_list <- compute_max_p_difference(
       dvec = dvec,
@@ -276,8 +281,31 @@ compute_bounds_ats_new <- function(df,
       y    = y,
       reg_formula = reg_formula
     )
+    regression_probs <- max_p_diffs_list
   }
   max_p_diffs <- max_p_diffs_list$max_p_diffs
+
+  if (!is.null(regression_probs)) {
+    my_values_reg <- regression_probs$my_values
+    p_ym_0_vec <- regression_probs$p_ym_0_vec
+    p_ym_1_vec <- regression_probs$p_ym_1_vec
+
+    p_m_0 <- vapply(
+      seq_len(nrow(mvalues)),
+      function(idx) {
+        sum(p_ym_0_vec[my_values_reg$m == idx])
+      },
+      numeric(1)
+    )
+
+    p_m_1 <- vapply(
+      seq_len(nrow(mvalues)),
+      function(idx) {
+        sum(p_ym_1_vec[my_values_reg$m == idx])
+      },
+      numeric(1)
+    )
+  }
   
   
   # build the same constraint matrices as in lb_frac_affected
@@ -330,7 +358,7 @@ compute_bounds_ats_new <- function(df,
                                     defiers_constraints_matrix)
   
   #Combine the constants associated with the matrices
-  rhs_vec <- c(p_m_1, p_m_0, max_p_diffs, max_defiers_share)
+  rhs_vec <- c(p_m_1, p_m_0, max_p_diffs, max_defier_share)
   
   #Specify the direction of the equalities/inequalities
   dir <- c(rep("==", 2*NROW(m1_marginals_constraints_matrix)),
@@ -380,9 +408,24 @@ compute_bounds_ats_new <- function(df,
   theta_kk_min <- as.numeric(theta_lp$optimum)
   
   
+  at_group_index <- which(purrr::map_lgl(
+    .x = 1:NROW(mvalues),
+    .f = ~.row_equals(mvalues[.x, , drop = FALSE], at_group)
+  ))
+
+  if (!length(at_group_index)) {
+    warning("The requested at_group does not appear in the mediator support; returning NA bounds.")
+    return(data.frame(lb = NA_real_, ub = NA_real_))
+  }
+
   # Replace shares: θ_{kk}^{min} / P(M=k | D=d)
-  p_mk_d1 <- mean(mvec[dvec == 1] == at_group)
-  p_mk_d0 <- mean(mvec[dvec == 0] == at_group)
+  if (is.null(reg_formula)) {
+    p_mk_d1 <- mean(mvec[dvec == 1] == at_group)
+    p_mk_d0 <- mean(mvec[dvec == 0] == at_group)
+  } else {
+    p_mk_d1 <- p_m_1[at_group_index]
+    p_mk_d0 <- p_m_0[at_group_index]
+  }
   if (p_mk_d1 <= 0 || p_mk_d0 <= 0) {
     warning("P(M=at_group | D=d) is zero for some d; returning NA bounds.")
     return(data.frame(lb = NA_real_, ub = NA_real_))
@@ -407,71 +450,34 @@ compute_bounds_ats_new <- function(df,
   ecdf_y_mkd0 <- ecdf_y_mkd0_fn(yvalues) #this is a vector of CDFs evaluated at yvalues
   } else{
     # Regression-inferred CDFs (discrete Y only)
-    yuniq <- sort(unique(yvec))
     if (!is_discrete_Y) {
       stop("reg_formula currently supported for discrete Y; Y variable might be continuous.")
     }
-    
-    # Match mediator pattern: M == at_group
-    m_match <- apply(mdf, 1, function(row) row_equals(row, at_group))
-    
-    # Parse OLS/IV spec
-    iv_spec <- extract_iv(reg_formula, d)
-    
-    # Allocate joint probabilities for each y and each d
-    partial_pmf_d1 <- numeric(length(yvalues))
-    partial_pmf_d0 <- numeric(length(yvalues))
-    
-    for (j in seq_along(yvalues)) {
-      y_val <- yvalues[j]
-      df$lhs <- as.integer(yvec == y_val & m_match)  # indicator {Y=y_val, M=at_group}
-      
-      # Build fixest formula
-      if (iv_spec$is_iv) {
-        ctrl  <- paste(iv_spec$controls, collapse = " + ")
-        instr <- paste(iv_spec$instr,     collapse = " + ")
-        fml   <- as.formula(sprintf("lhs ~ %s | %s ~ %s",
-                                    ctrl,
-                                    paste(iv_spec$treat, collapse = "+"),
-                                    instr))
-      } else {
-        rhs <- paste(c(iv_spec$treat, iv_spec$controls), collapse = " + ")
-        fml <- as.formula(paste("lhs ~", rhs))
-      }
-      
-      # Vars, drop NA
-      req <- c("lhs", d, iv_spec$controls, if (iv_spec$is_iv) iv_spec$instr else NULL)
-      req <- unique(req[nzchar(req)])
-      df_fit <- tidyr::drop_na(df[, req, drop = FALSE])
-      if (nrow(df_fit) == 0) { partial_pmf_d1[j] <- 0; partial_pmf_d0[j] <- 0; next }
-      
-      # Fit model
-      mod <- fixest::feols(fml, data = df_fit)
-      
-      # Counterfactual sets for D=1 and D=0
-      new1 <- df_fit
-      new1[[d]] <- 1
-      new0 <- df_fit
-      new0[[d]] <- 0
-      
-      pred1 <- as.numeric(predict(mod, newdata = new1))
-      pred0 <- as.numeric(predict(mod, newdata = new0))
-      
-      # Average predicted joint probs: P(Y=y, M=k | D=d)
-      partial_pmf_d1[j] <- mean(pred1, na.rm = TRUE)
-      partial_pmf_d0[j] <- mean(pred0, na.rm = TRUE)
+
+    if (!length(at_group_index)) {
+      warning("The requested at_group does not appear in the mediator support; returning NA bounds.")
+      return(data.frame(lb = NA_real_, ub = NA_real_))
     }
-    
-    # Convert to conditional PMFs of Y | M=k, D=d
-    # Nonnegative joint predictions (from your regression loop):
-    joint1 <- pmax(0, as.numeric(partial_pmf_d1))  # ≈ P(Y=y, M=at_group | D=1)
-    joint0 <- pmax(0, as.numeric(partial_pmf_d0))  # ≈ P(Y=y, M=at_group | D=0)
-    
-    # Build a VALID conditional PMF with safe empirical fallback
+
+    m_match <- apply(mdf, 1, function(row) .row_equals(row, at_group))
+
+    extract_joint <- function(prob_vec) {
+      vapply(
+        yvalues,
+        function(y_val) {
+          idx <- which(my_values_reg$y == y_val & my_values_reg$m == at_group_index)
+          if (length(idx) == 0) 0 else prob_vec[idx]
+        },
+        numeric(1)
+      )
+    }
+
+    joint1 <- pmax(0, extract_joint(p_ym_1_vec))
+    joint0 <- pmax(0, extract_joint(p_ym_0_vec))
+
     build_conditional_pmf <- function(joint, y_cell) {
       s <- sum(joint)
       if (!is.finite(s) || s <= .Machine$double.eps) {
-        # fallback: empirical conditional PMF of Y | M=at_group, D=d
         if (length(y_cell) == 0L) return(rep(0, length(yvalues)))
         tab <- table(factor(y_cell, levels = yvalues))
         return(as.numeric(tab) / sum(tab))
@@ -482,27 +488,21 @@ compute_bounds_ats_new <- function(df,
       if (s2 > 0) pmf <- pmf / s2
       pmf
     }
-    
-    pmf1 <- build_conditional_pmf(joint1, y_cell = yvec[mvec == at_group & dvec == 1])
-    pmf0 <- build_conditional_pmf(joint0, y_cell = yvec[mvec == at_group & dvec == 0])
-    
-    # Raw CDF vectors
-    ecdf_y_mkd1 <- cumsum(pmf1)
-    ecdf_y_mkd0 <- cumsum(pmf0)
-    
-    # --- Validator that takes ONLY the CDF vector and returns a fixed CDF vector ---
-    .validate_cdf <- function(cdfv) {
+
+    pmf1 <- build_conditional_pmf(joint1, y_cell = yvec[m_match & dvec == 1])
+    pmf0 <- build_conditional_pmf(joint0, y_cell = yvec[m_match & dvec == 0])
+
+    validate_cdf <- function(cdfv) {
       if (!length(cdfv)) return(cdfv)
       cdfv[!is.finite(cdfv)] <- 0
-      cdfv <- pmin(1, pmax(0, cdfv))  # clamp to [0,1]
-      cdfv <- cummax(cdfv)            # enforce nondecreasing
-      cdfv[length(cdfv)] <- 1         # FORCE last point to 1
+      cdfv <- pmin(1, pmax(0, cdfv))
+      cdfv <- cummax(cdfv)
+      cdfv[length(cdfv)] <- 1
       cdfv
     }
-    
-    # Validate the CDF vectors
-    ecdf_y_mkd1 <- .validate_cdf(ecdf_y_mkd1)
-    ecdf_y_mkd0 <- .validate_cdf(ecdf_y_mkd0)
+
+    ecdf_y_mkd1 <- validate_cdf(cumsum(pmf1))
+    ecdf_y_mkd0 <- validate_cdf(cumsum(pmf0))
     }
   
   

@@ -212,14 +212,14 @@ compute_partial_densities_and_shares <- function(df,
       pmf_y_ats_treated <- purrr::map_dbl(.x = 1:length(yvalues),
                                           .f = ~stats::weighted.mean(x = y_ats_treated == yvalues[.x],
                                                                      w = w_ats_treated))
-      
+
       pmf_y_ats_untreated <- purrr::map_dbl(.x = 1:length(yvalues),
                                             .f = ~stats::weighted.mean(x = y_ats_untreated == yvalues[.x],
                                                                        w = w_ats_untreated))
-      
+
       pmf_partial_11 <- (frac_ats + frac_compliers) * pmf_y_ats_treated
       pmf_partial_01 <- (frac_ats) * pmf_y_ats_untreated
-      
+
       resultsList <-
         list(frac_compliers = frac_compliers,
              frac_ats = frac_ats,
@@ -233,65 +233,54 @@ compute_partial_densities_and_shares <- function(df,
       if (continuous_Y){
         stop("reg_formula is only allowed when Y is discrete (set continuous_Y = FALSE or supply num_Ybins).")
       }else{
-     
-      # ---- ensure treatment on RHS ---------------------------------
-      reg_formula_chr <- paste(deparse(reg_formula), collapse = " ")
-      if (!grepl("\\btreat\\b", reg_formula_chr)) {
-        warning("The treatment variable '", d,
-                "' was not found in the provided reg_formula; ",
-                "I have added it as a regressor. Please edit reg_formula if that was not your intention.")
-        reg_formula_chr <- paste("~", d, "+", sub("^~", "", reg_formula_chr))
-        reg_formula     <- as.formula(reg_formula_chr)
-      }
-      
-      # ---- predicted P(M=1 | D=d)  ----------------------------------
-      p_m1 <- .predict_mean(lhs_vec = as.integer(mvec == 1),
-                            df      = df,
-                            d_var   = d,
-                            d_val   = 1,
-                            reg_formula = reg_formula,
-                            wvec    = wvec)
-      p_m0 <- .predict_mean(lhs_vec = as.integer(mvec == 1),
-                            df      = df,
-                            d_var   = d,
-                            d_val   = 0,
-                            reg_formula = reg_formula,
-                            wvec    = wvec)
-      
-      frac_compliers <- p_m1 - p_m0
-      frac_ats       <- p_m0
-      theta_ats      <- frac_ats / (frac_compliers + frac_ats)
-      
-      # ---- joint probabilities for each y ---------------------------
-      yvalues <- sort(unique(yvec))
-      
-      pmf_partial11 <- purrr::map_dbl(
-        yvalues,
-        ~.predict_mean(lhs_vec = as.integer((yvec == .x) & (mvec == 1)),
-                       df      = df,
-                       d_var   = d,
-                       d_val   = 1,
-                       reg_formula = reg_formula,
-                       wvec    = wvec)
-      )
-      
-      pmf_partial01 <- purrr::map_dbl(
-        yvalues,
-        ~.predict_mean(lhs_vec = as.integer((yvec == .x) & (mvec == 1)),
-                       df      = df,
-                       d_var   = d,
-                       d_val   = 0,
-                       reg_formula = reg_formula,
-                       wvec    = wvec)
-      )
-      
-      # Return (discrete-Y only)
-      resultsList <- list(frac_compliers = frac_compliers,
-           frac_ats       = frac_ats,
-           theta_ats      = theta_ats,
-           pmf_partial11  = pmf_partial11,
-           pmf_partial01  = pmf_partial01,
-           yvalues        = yvalues)
+
+        yvalues <- sort(unique(yvec))
+        mvalues <- unique(mvec)
+        my_values <- purrr::cross_df(list(m = mvalues, y = yvalues)) %>%
+          dplyr::arrange(m, y) %>%
+          dplyr::select(y, m)
+        my_values$m <- as.numeric(as.character(my_values$m))
+        m_one_value <- max(as.numeric(as.character(mvalues)))
+
+        p_ym_0_vec <- compute_regression_probs(df = df,
+                                               yvec = yvec,
+                                               mvec = mvec,
+                                               my_values = my_values,
+                                               d = d,
+                                               reg_formula = reg_formula,
+                                               transform_fun = control_transform)
+
+        p_ym_1_vec <- compute_regression_probs(df = df,
+                                               yvec = yvec,
+                                               mvec = mvec,
+                                               my_values = my_values,
+                                               d = d,
+                                               reg_formula = reg_formula,
+                                               transform_fun = treated_transform)
+
+        p_m_0 <- sum(p_ym_0_vec[my_values$m == m_one_value])
+        p_m_1 <- sum(p_ym_1_vec[my_values$m == m_one_value])
+
+        frac_compliers <- p_m_1 - p_m_0
+        frac_ats       <- p_m_0
+        theta_ats      <- frac_ats / (frac_compliers + frac_ats)
+
+        lookup_joint <- function(prob_vec) {
+          vapply(yvalues, function(y_val) {
+            idx <- which(my_values$y == y_val & my_values$m == m_one_value)
+            if (length(idx) == 0) 0 else prob_vec[idx]
+          }, numeric(1))
+        }
+
+        pmf_partial11 <- lookup_joint(p_ym_1_vec)
+        pmf_partial01 <- lookup_joint(p_ym_0_vec)
+
+        resultsList <- list(frac_compliers = frac_compliers,
+             frac_ats       = frac_ats,
+             theta_ats      = theta_ats,
+             pmf_partial11  = pmf_partial11,
+             pmf_partial01  = pmf_partial01,
+             yvalues        = yvalues)
     }
     }
     return(resultsList)
