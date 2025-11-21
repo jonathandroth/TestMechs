@@ -88,6 +88,8 @@ trimmed_expectation_from_cdf <- function(ecdf_table,
 #' @param y Name of the outcome variable
 #' @param at_group The AT group of interest. Default is 1, so we compute means for units with M(1)=M(0)=1.
 #' @param max_defier_share Bound on the proportion of defiers in the population. Default is 0 which indicates that the monotonicity constraint is imposed.
+#' @param allow_min_defiers If the bound on defiers (max_defier_share) is inconsistent with the data, proceed by allowing the
+#'   minimum number of defiers compatible with the data. Otherwise, throw an error. Default is TRUE.
 #' @param num_gridpoints (Optional.) The number of gridpoints used in evaluating the integral. Higher is more accurate but more computationally costly
 #' @importFrom "stats" "quantile"
 #' @export
@@ -98,6 +100,7 @@ compute_bounds_ats_new <- function(df,
                                y,
                                at_group = 1,
                                max_defier_share = 0,
+                               allow_min_defiers = TRUE,
                                reg_formula = NULL,
                                num_gridpoints = 10^5){
 
@@ -239,6 +242,37 @@ compute_bounds_ats_new <- function(df,
 
   #Create a matrix (really, vector) that bounds the total defiers share
   defiers_constraints_matrix <- c(defier_types, rep(0,NROW(mvalues)))
+
+  ## We now check feasibility of the program by computing the minimal defier share
+  # consistent with the constraints
+  feasibility_lp <-
+    Rglpk::Rglpk_solve_LP(obj = defiers_constraints_matrix, #obj is sum of defiers shares
+                          mat = rbind(m1_marginals_constraints_matrix,
+                                      m0_marginals_constraints_matrix),
+                          rhs = c(p_m_1,p_m_0),
+                          dir = rep("==", NROW(m1_marginals_constraints_matrix)*2),
+                          max = FALSE
+    )
+
+  if(feasibility_lp$status == 1){
+    warning("Error in checking feasibility. Proceed with caution")
+  }else{
+
+    min_defier_share <- feasibility_lp$optimum
+
+    if(min_defier_share > max_defier_share){
+      if(allow_min_defiers){
+        max_defier_share <- min_defier_share + 10^(-6) #update max defier share to the optimum plus a small tolerance
+        warning(paste0("The data is incompatible with the specified max_defiers_share.\n",
+                       "                           Setting this to the min value compatible with the data:",
+                       max_defier_share))
+      }else{
+        stop(paste0("The data is incompatible with the specified max_defiers_share. \n",
+                    "                        The specified value is ",
+                    max_defier_share, " but the min compatible with the data is ", min_defier_share))
+      }
+    }
+  }
 
   ##Create a constraint corresponding to the constraint that max_p_diffs must be greater than or equal to the sum of all complier types that end up at a given mvalue
   #Create a matrix where each row i is a NROW(m1_types) length vector where the jth element indicates if the jth row of m1_types equals the ith row of mvalues and the jth row of m1_types is not exactly equal to the jth row of m0_types
