@@ -306,23 +306,23 @@ test_that("lb_frac_affected matches across mediator vector regressions", {
 })
 
 
-test_that("compute_bounds_ats_new agrees across reg specs", {
-  baseline <- compute_bounds_ats_new(df = datasets$mother_data, d = "treat", y = "motherfinancial", m= "relationship_husb", at_group = 5)
-  trivial <- compute_bounds_ats_new(df = datasets$mother_data, d = "treat", y = "motherfinancial", m= "relationship_husb", at_group = 5, reg_formula = "~ treat")
+test_that("bounds_ade_ats agrees across reg specs", {
+  baseline <- bounds_ade_ats(df = datasets$mother_data, d = "treat", y = "motherfinancial", m= "relationship_husb", at_group = 5)
+  trivial <- bounds_ade_ats(df = datasets$mother_data, d = "treat", y = "motherfinancial", m= "relationship_husb", at_group = 5, reg_formula = "~ treat")
   expect_equivalent_results(baseline, trivial)
 })
 
 
-test_that("compute_bounds_ats_new agrees across reg specs", {
-  controls <- compute_bounds_ats_new(df = datasets$mother_data, d = "treat", y = "motherfinancial",
-                                     m= "relationship_husb", at_group = 5,
-                                     reg_formula = "~ treat + factor(interviewer)")
-  fes <- compute_bounds_ats_new(df = datasets$mother_data, d = "treat", y = "motherfinancial",
-                                m= "relationship_husb", at_group = 5,
-                                reg_formula = "~ treat | interviewer")
-  iv <- compute_bounds_ats_new(df = datasets$mother_data |> dplyr::mutate(treativ = treat), d = "treat", y = "motherfinancial",
-                               m= "relationship_husb", at_group = 5,
-                               reg_formula = "~ (treat=treativ) | factor(interviewer)")
+test_that("bounds_ade_ats agrees across reg specs", {
+  controls <- bounds_ade_ats(df = datasets$mother_data, d = "treat", y = "motherfinancial",
+                             m= "relationship_husb", at_group = 5,
+                             reg_formula = "~ treat + factor(interviewer)")
+  fes <- bounds_ade_ats(df = datasets$mother_data, d = "treat", y = "motherfinancial",
+                        m= "relationship_husb", at_group = 5,
+                        reg_formula = "~ treat | interviewer")
+  iv <- bounds_ade_ats(df = datasets$mother_data |> dplyr::mutate(treativ = treat), d = "treat", y = "motherfinancial",
+                       m= "relationship_husb", at_group = 5,
+                       reg_formula = "~ (treat=treativ) | factor(interviewer)")
   expect_equivalent_results(controls, fes, iv)
 })
 

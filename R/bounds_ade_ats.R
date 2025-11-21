@@ -90,19 +90,20 @@ trimmed_expectation_from_cdf <- function(ecdf_table,
 #' @param max_defier_share Bound on the proportion of defiers in the population. Default is 0 which indicates that the monotonicity constraint is imposed.
 #' @param allow_min_defiers If the bound on defiers (max_defier_share) is inconsistent with the data, proceed by allowing the
 #'   minimum number of defiers compatible with the data. Otherwise, throw an error. Default is TRUE.
+#' @param reg_formula Optional regression formula used to model the joint distribution of (Y, M) given D. If NULL, empirical distributions are used.
 #' @param num_gridpoints (Optional.) The number of gridpoints used in evaluating the integral. Higher is more accurate but more computationally costly
 #' @importFrom "stats" "quantile"
 #' @export
 
-compute_bounds_ats_new <- function(df,
-                               d,
-                               m,
-                               y,
-                               at_group = 1,
-                               max_defier_share = 0,
-                               allow_min_defiers = TRUE,
-                               reg_formula = NULL,
-                               num_gridpoints = 10^5){
+bounds_ade_ats <- function(df,
+                           d,
+                           m,
+                           y,
+                           at_group = 1,
+                           max_defier_share = 0,
+                           allow_min_defiers = TRUE,
+                           reg_formula = NULL,
+                           num_gridpoints = 10^5){
 
 
   df <- remove_missing_from_df(df = df,
