@@ -615,7 +615,7 @@ compute_max_p_difference_reg <- function(dvec,
 
 #' @export
 #' @title Finds the minimum number of defiers compatible with the sharp null
-#'@description This function finds the minimum value of max_defiers_share such that compute_tv_ats_multiple_m returns zero
+#'@description This function finds the minimum value of max_defiers_share such that lb_frac_affected returns zero
 #' @param df A data frame
 #' @param d Name of the treatment variable in the df
 #' @param m Vector of the mediator variable
