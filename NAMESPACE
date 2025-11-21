@@ -3,7 +3,7 @@
 export("%>%")
 export(breakdown_defier_share)
 export(ci_TV)
-export(compute_bounds_ats)
+export(bounds_ade_ats)
 export(compute_min_defiers_binaryM)
 export(compute_tv_ats)
 export(lb_frac_affected)
