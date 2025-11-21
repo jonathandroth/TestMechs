@@ -28,7 +28,7 @@
 #' @param allow_min_defiers (Optional) If the bound on defiers
 #'   (max_defier_share) is inconsistent with the data, proceed by allowing the
 #'   minimum number of defiers compatible with the data. Otherwise, throw an
-#'   error. Default is FALSE
+#'   error. Default is TRUE
 #' @param return_min_defiers (Optional) If true, the function returns the
 #'   minimum number of defiers consistent with the data rather than the TV
 #'   bounds
@@ -44,7 +44,7 @@ lb_frac_affected <- function(df,
                              continuous_Y = FALSE,
                              num_Ybins = NULL,
                              max_defiers_share = 0,
-                             allow_min_defiers = FALSE,
+                             allow_min_defiers = TRUE,
                              return_min_defiers = FALSE){
 
   df <- remove_missing_from_df(df = df,
@@ -64,8 +64,8 @@ lb_frac_affected <- function(df,
   } else {
     continuous_y_flag <- n / length(unique(yvec)) <= 30
     if (!continuous_Y && continuous_y_flag) {
-      message("continous_Y is set to FALSE but the outcome appears to be continuous. We are discretizing using 5 bins. 
-              You can change the number of bins by setting the num_Ybins argument, or specify continuous_Y = TRUE to 
+      message("continous_Y is set to FALSE but the outcome appears to be continuous. We are discretizing using 5 bins.
+              You can change the number of bins by setting the num_Ybins argument, or specify continuous_Y = TRUE to
               use kernel density estimates tailored for continuous variables." )
       num_Ybins <- 5
       yvec <- discretize_y(yvec = yvec, numBins = num_Ybins)
