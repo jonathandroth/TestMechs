@@ -13,6 +13,7 @@ test_sharp_null_binary_m(
   ordering = NULL,
   B = 500,
   cluster = NULL,
+  reg_formula = NULL,
   weight.matrix = "diag",
   ats_only = F,
   alpha = 0.05,
@@ -46,6 +47,8 @@ ordering is used.}
 \item{B}{Bootstrap size, default is zero}
 
 \item{cluster}{Cluster for bootstrap}
+
+\item{reg_formula}{Regression formula for the non-experimental setting}
 
 \item{weight.matrix}{Weight matrix used to implement FSST. Possible options
  are "diag", "avar", "identity." Defaults is "diag" as in FSST.

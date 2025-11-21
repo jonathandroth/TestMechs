@@ -4,7 +4,7 @@
 \alias{remove_missing_from_df}
 \title{This function processes the inputted dataframe to remove missing values}
 \usage{
-remove_missing_from_df(df, d, m, y, w = NULL)
+remove_missing_from_df(df, d, m, y, w = NULL, reg_formula = NULL)
 }
 \arguments{
 \item{df}{A data.frame}
@@ -16,6 +16,8 @@ remove_missing_from_df(df, d, m, y, w = NULL)
 \item{y}{Name of the outcome variable}
 
 \item{w}{(Optional) Name of weighting variable. If null, equal weights are used}
+
+\item{reg_formula}{(Optional) A fixest regression formula. If provided, we remove observations that have missing covariates for the regression}
 }
 \description{
 This function processes the inputted dataframe to remove missing values

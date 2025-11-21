@@ -29,12 +29,13 @@ bounds_ade_ats(
 
 \item{max_defier_share}{Bound on the proportion of defiers in the population. Default is 0 which indicates that the monotonicity constraint is imposed.}
 
-\item{allow_min_defiers}{If the bound on defiers (max_defier_share) is inconsistent with the data, proceed by allowing the minimum number of defiers compatible with the data. Otherwise, throw an error. Default is TRUE.}
+\item{allow_min_defiers}{If the bound on defiers (max_defier_share) is inconsistent with the data, proceed by allowing the
+minimum number of defiers compatible with the data. Otherwise, throw an error. Default is TRUE.}
 
 \item{reg_formula}{Optional regression formula used to model the joint distribution of (Y, M) given D. If NULL, empirical distributions are used.}
 
 \item{num_gridpoints}{(Optional.) The number of gridpoints used in evaluating the integral. Higher is more accurate but more computationally costly}
 }
 \description{
-Computes bounds on the average direct effect for k-always-takers, \eqn{E[Y(1, k) - Y(1, k) \mid G = kk]}, allowing for optional regression-adjusted probability estimates.
+Computes bounds on E[Y(1,k) - Y(1,k) | G = kk], the average direct effect for k-ATs for whom there is a direct effect of D on Y
 }

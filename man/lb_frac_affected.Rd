@@ -12,10 +12,11 @@ lb_frac_affected(
   y,
   at_group = NULL,
   w = NULL,
-  continuous_Y = base::ifelse(is.null(num_Ybins), TRUE, FALSE),
+  reg_formula = NULL,
+  continuous_Y = FALSE,
   num_Ybins = NULL,
   max_defiers_share = 0,
-  allow_min_defiers = FALSE,
+  allow_min_defiers = TRUE,
   return_min_defiers = FALSE
 )
 }
@@ -38,8 +39,10 @@ weights proportional to shares in population}
 \item{w}{(Optional) Name of weighting variable. If null, equal weights are
 used}
 
+\item{reg_formula}{(Optional) Regression formula. The default is null.}
+
 \item{continuous_Y}{(Optional) Whether Y should be treated as continuous, in
-which case kernel density is used, or discrete. Default is TRUE.}
+which case kernel density is used, or discrete. Default is FALSE.}
 
 \item{num_Ybins}{(Optional) If specified, Y is discretized into the given
 number of bins (if num_Ybins is larger than the number of unique values of
@@ -51,7 +54,7 @@ fraction of the population can be defiers (of any type). Default is zero}
 \item{allow_min_defiers}{(Optional) If the bound on defiers
 (max_defier_share) is inconsistent with the data, proceed by allowing the
 minimum number of defiers compatible with the data. Otherwise, throw an
-error. Default is FALSE}
+error. Default is TRUE}
 
 \item{return_min_defiers}{(Optional) If true, the function returns the
 minimum number of defiers consistent with the data rather than the TV

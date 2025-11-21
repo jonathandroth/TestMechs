@@ -36,5 +36,5 @@ the weighted average of TV across all always-takers, with weights proportional t
 \item{num_Ybins}{(Optional) If specified, Y is discretized into the given number of bins (if num_Ybins is larger than the number of unique values of Y, no changes are made)}
 }
 \description{
-This function finds the minimum value of max_defiers_share such that compute_tv_ats_multiple_m returns zero
+This function finds the minimum value of max_defiers_share such that lb_frac_affected returns zero
 }
