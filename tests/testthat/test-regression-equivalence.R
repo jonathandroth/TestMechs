@@ -2,6 +2,9 @@ skip_if_not_installed("fixest")
 skip_if_not_installed("osqp")
 skip_if_not_installed("Rglpk")
 
+library(haven)
+library(ggplot2)
+
 setup_baranov_data <- function() {
   data("baranov_data", package = "TestMechs")
   mother_data <- mother_data |> dplyr::filter(THP_sample == 1)
@@ -20,6 +23,58 @@ expect_equivalent_results <- function(ref, ...) {
   lapply(list(...), function(candidate) {
     testthat::expect_equal(candidate, ref, tolerance = 1e-8)
   })
+}
+
+expect_distinct_results <- function(lhs, rhs, tolerance = 1e-8) {
+  testthat::expect_false(
+    isTRUE(all.equal(lhs, rhs, tolerance = tolerance)),
+    info = "Specifications with additional controls should differ from no-control estimates"
+  )
+}
+
+expect_ggplots_equal <- function(..., strict = TRUE) {
+  # We only really need svglite here
+  testthat::skip_if_not_installed("svglite")
+
+  plots <- list(...)
+  if (length(plots) == 1 && is.list(plots[[1]])) {
+    plots <- plots[[1]]
+  }
+
+  if (length(plots) < 2) {
+    stop("expect_ggplots_equal_svg(...) requires at least two ggplot objects.")
+  }
+
+  # Helper: render a ggplot to an SVG string
+  to_svg <- function(p) {
+    if (!inherits(p, "ggplot")) {
+      stop("All inputs to expect_ggplots_equal_svg must be ggplot objects (or a list of them).")
+    }
+    svglite::stringSVG(print(p))
+  }
+
+  ref_svg <- to_svg(plots[[1]])
+
+  for (i in 2:length(plots)) {
+    svg_i <- to_svg(plots[[i]])
+
+    if (strict) {
+      # Strict: SVG strings must be exactly identical
+      testthat::expect_equal(
+        svg_i,
+        ref_svg,
+        info = paste("Plot", i, "differs from plot 1")
+      )
+    } else {
+      # Non-strict option if you later want to do something fuzzier
+      testthat::expect_true(
+        identical(svg_i, ref_svg),
+        info = paste("Plot", i, "differs from plot 1")
+      )
+    }
+  }
+
+  invisible(TRUE)
 }
 
 test_that("test_sharp_null regression adjustments match baseline (binary M)", {
@@ -218,7 +273,11 @@ test_that("lb_frac_affected respects regression choices", {
     allow_min_defiers = TRUE
   )
 
-  expect_equivalent_results(baseline, trivial, controls, fe, iv)
+  expect_equivalent_results(baseline, trivial)
+  expect_equivalent_results(controls, fe, iv)
+
+  expect_distinct_results(baseline, controls)
+  expect_distinct_results(trivial, controls)
 })
 
 test_that("lb_frac_affected matches across mediator vector regressions", {
@@ -249,22 +308,6 @@ test_that("lb_frac_affected matches across mediator vector regressions", {
 test_that("partial_density_plot agrees across regression specifications", {
   datasets <- setup_baranov_data()
 
-  plot_base <- partial_density_plot(
-    df = datasets$mother_data,
-    d = "treat",
-    m = "grandmother",
-    y = "motherfinancial",
-    num_Ybins = 5
-  )
-
-  plot_trivial <- partial_density_plot(
-    df = datasets$mother_data,
-    d = "treat",
-    m = "grandmother",
-    y = "motherfinancial",
-    num_Ybins = 5,
-    reg_formula = "~ treat"
-  )
 
   plot_controls <- partial_density_plot(
     df = datasets$mother_data,
@@ -284,11 +327,30 @@ test_that("partial_density_plot agrees across regression specifications", {
     reg_formula = "~ treat | interviewer"
   )
 
-  plots_data <- list(plot_base, plot_trivial, plot_controls, plot_fe) |>
-    lapply(ggplot2::ggplot_build) |>
-    lapply("[[", "data")
+  expect_ggplots_equal(plot_controls, plot_fe)
+})
 
-  lapply(plots_data[-1], function(layer_data) {
-    expect_equal(layer_data, plots_data[[1]])
-  })
+
+
+test_that("partial_density_plot agrees across regression specifications", {
+  datasets <- setup_baranov_data()
+
+  plot_base <- partial_density_plot(
+    df = datasets$mother_data,
+    d = "treat",
+    m = "grandmother",
+    y = "motherfinancial",
+    num_Ybins = 5
+  )
+
+  plot_trivial <- partial_density_plot(
+    df = datasets$mother_data,
+    d = "treat",
+    m = "grandmother",
+    y = "motherfinancial",
+    num_Ybins = 5,
+    reg_formula = "~ treat"
+  )
+
+  expect_ggplots_equal(plot_base, plot_trivial)
 })
