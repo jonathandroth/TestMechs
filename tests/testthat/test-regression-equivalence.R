@@ -305,6 +305,27 @@ test_that("lb_frac_affected matches across mediator vector regressions", {
   expect_equivalent_results(baseline, trivial)
 })
 
+
+test_that("compute_bounds_ats_new agrees across reg specs", {
+  baseline <- compute_bounds_ats_new(df = datasets$mother_data, d = "treat", y = "motherfinancial", m= "relationship_husb", at_group = 5)
+  trivial <- compute_bounds_ats_new(df = datasets$mother_data, d = "treat", y = "motherfinancial", m= "relationship_husb", at_group = 5, reg_formula = "~ treat")
+  expect_equivalent_results(baseline, trivial)
+})
+
+
+test_that("compute_bounds_ats_new agrees across reg specs", {
+  controls <- compute_bounds_ats_new(df = datasets$mother_data, d = "treat", y = "motherfinancial",
+                                     m= "relationship_husb", at_group = 5,
+                                     reg_formula = "~ treat + factor(interviewer)")
+  fes <- compute_bounds_ats_new(df = datasets$mother_data, d = "treat", y = "motherfinancial",
+                                m= "relationship_husb", at_group = 5,
+                                reg_formula = "~ treat | interviewer")
+  iv <- compute_bounds_ats_new(df = datasets$mother_data |> dplyr::mutate(treativ = treat), d = "treat", y = "motherfinancial",
+                               m= "relationship_husb", at_group = 5,
+                               reg_formula = "~ (treat=treativ) | factor(interviewer)")
+  expect_equivalent_results(controls, fes, iv)
+})
+
 test_that("partial_density_plot agrees across regression specifications", {
   datasets <- setup_baranov_data()
 
