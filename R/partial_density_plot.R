@@ -9,7 +9,7 @@
 #' @param density_1_label (Optional) The label on the plot for the d=1 density.
 #' @param density_0_label (Optional) The label on the plot for the d=0 density.
 #' @param continuous_Y (Optional) Should Y be treated as continuous for density estimation. Default is FALSE.
-#' @param reg_formula (Optional) Regression formula for observational adjustment  
+#' @param reg_formula (Optional) Regression formula for observational adjustment
 #' @param num_Ybins (Optional) If specified, Y is discretized into the given number of bins (if num_Ybins is larger than the number of unique values of Y, no changes are made)
 #' @return A ggplot object showing partial densities
 #' @importFrom ggplot2 ggplot
@@ -72,7 +72,8 @@ partial_density_plot <- function(df,
   }
 
   yvec <- df[[y]]
-  
+  n <- nrow(df)
+
   #Discretize y if needed
   if(!is.null(num_Ybins)){
     yvec <- discretize_y(yvec = yvec, numBins = num_Ybins)
@@ -80,8 +81,8 @@ partial_density_plot <- function(df,
   } else {
     continuous_y_flag <- n / length(unique(yvec)) <= 30
     if (!continuous_Y && continuous_y_flag) {
-      message("continous_Y is set to FALSE but the outcome appears to be continuous. We are discretizing using 5 bins. 
-              You can change the number of bins by setting the num_Ybins argument, or specify continuous_Y = TRUE to 
+      message("continous_Y is set to FALSE but the outcome appears to be continuous. We are discretizing using 5 bins.
+              You can change the number of bins by setting the num_Ybins argument, or specify continuous_Y = TRUE to
               use kernel density estimates tailored for continuous variables." )
       num_Ybins <- 5
       yvec <- discretize_y(yvec = yvec, numBins = num_Ybins)
@@ -153,10 +154,10 @@ partial_density_plot <- function(df,
   return(partial_density_plot)
 }
 
-compute_partial_densities_and_shares <- function(df, 
-                                                 d, 
-                                                 m, 
-                                                 y, 
+compute_partial_densities_and_shares <- function(df,
+                                                 d,
+                                                 m,
+                                                 y,
                                                  w = NULL,
                                                  continuous_Y=TRUE,
                                                  reg_formula = NULL,
@@ -164,48 +165,48 @@ compute_partial_densities_and_shares <- function(df,
     yvec <- df[[y]]
     dvec <- df[[d]]
     mvec <- df[[m]]
-    
+
     if(is.null(w)){
       wvec <- rep(1, NROW(df))
     }else{
       wvec <- df[[w]]
     }
-    
+
     # Randomized branch
     if(is.null(reg_formula)){
-      
+
     frac_compliers <- stats::weighted.mean( mvec[dvec == 1], w = wvec[dvec == 1] ) -
       stats::weighted.mean( mvec[dvec == 0], w = wvec[dvec == 0])
     frac_ats <- stats::weighted.mean( mvec[dvec == 0], w= wvec[dvec == 0] )
     theta_ats <- frac_ats / (frac_compliers + frac_ats) #fraction among Cs/ATs
-    
+
     ats_untreated_index <- (dvec == 0) & (mvec == 1) #these are ATs when untreated
     ats_treated_index <- (dvec == 1) & (mvec == 1) #these are ATs or Cs
-    
+
     y_ats_treated <- yvec[ats_treated_index]
     y_ats_untreated <- yvec[ats_untreated_index]
-    
+
     w_ats_treated <- wvec[ats_treated_index]
     w_ats_untreated <- wvec[ats_untreated_index]
-    
+
     #The density function doesn't normalize weights, so normalize these
     w_ats_treated <- w_ats_treated/sum(w_ats_treated)
     w_ats_untreated <- w_ats_untreated/sum(w_ats_untreated)
-    
+
     if(continuous_Y){
       dens_y_ats_treated <- get_density_fn(x = y_ats_treated, weights = w_ats_treated, ...)
       dens_y_ats_untreated <- get_density_fn(x = y_ats_untreated, weights = w_ats_untreated, ...)
-      
+
       f_partial11 <- function(y){ (frac_ats + frac_compliers) * dens_y_ats_treated(y) }
       f_partial01 <- function(y){ frac_ats  * dens_y_ats_untreated(y) }
-      
+
       resultsList <-
         list(frac_compliers = frac_compliers,
              frac_ats = frac_ats,
              theta_ats = theta_ats,
              f_partial11 = f_partial11,
              f_partial01 = f_partial01)
-      
+
       return(resultsList)
     }else{
       yvalues <- unique(yvec)
@@ -293,22 +294,22 @@ compute_partial_densities_and_shares <- function(df,
                           reg_formula,
                           cluster = NULL,
                           wvec = NULL){
-  
+
   iv_spec <- extract_iv(reg_formula, d_var)
-  
+
   # add lhs to df
   df$lhs <- lhs_vec
-  
+
   # variables needed for NA-drop
   need_vars <- unique(c(d_var, "lhs", iv_spec$controls, iv_spec$instr))
   need_vars <- need_vars[nzchar(need_vars)]
   if (!is.null(cluster)) need_vars <- unique(c(need_vars, cluster))
-  
+
   keep_idx <- stats::complete.cases(df[, need_vars, drop = FALSE])
   if (!any(keep_idx)) return(NA_real_)
-  
+
   df_clean <- df[keep_idx, , drop = FALSE]
-  
+
   # if lhs is constant after NA-drop, just return that constant
   lhs_clean <- df_clean$lhs
   lhs_clean <- lhs_clean[!is.na(lhs_clean)]
@@ -316,7 +317,7 @@ compute_partial_densities_and_shares <- function(df,
     const_mean <- mean(lhs_clean)  # 0 or 1 (or NA if empty)
     return(const_mean)
   }
-  
+
   # build fixest formula
   if (iv_spec$is_iv) {
     ctrl  <- paste(iv_spec$controls, collapse = " + ")
@@ -329,15 +330,15 @@ compute_partial_densities_and_shares <- function(df,
     rhs <- if (nzchar(rhs)) rhs else "1"
     fml <- as.formula(paste("lhs ~", rhs))
   }
-  
+
   # counterfactual D value
   df_cf <- df_clean
   df_cf[[d_var]] <- d_val
-  
+
   # fit and predict (cluster only affects SEs, not needed here)
   reg <- fixest::feols(fml, data = df_clean)
   preds <- as.numeric(predict(reg, newdata = df_cf))
-  
+
   # average predictions (optionally weighted) over the kept rows
   if (is.null(wvec)) {
     return(mean(preds, na.rm = TRUE))
@@ -362,32 +363,32 @@ extract_iv <- function(reg_formula, d){
     as.character(reg_formula)
   }
   reg_str <- trimws(sub("^~", "", reg_str))  # drop leading "~"
-  
+
   # split by pipe if user left FE / etc (we ignore tail)
   split_pipe <- strsplit(reg_str, "\\|", fixed = FALSE)[[1]]
   rhs_main   <- trimws(split_pipe[1])
-  
+
   # Initialize output
   out <- list(is_iv    = FALSE,
               treat    = d,
               instr    = character(0),
               controls = character(0),
               added_treat  = FALSE)
-  
+
   # detect "( ... = ... )"
   if (grepl("\\([^)]*=[^)]*\\)", rhs_main)) {
     # IV branch
     out$is_iv <- TRUE
     iv_part <- sub(".*\\(([^)]*)\\).*", "\\1", rhs_main)
     sides   <- strsplit(iv_part, "=", fixed = TRUE)[[1]]
-    
+
     out$treat <- trimws(unlist(strsplit(sides[1], "+", fixed = TRUE)))
     out$instr <- trimws(unlist(strsplit(sides[2], "+", fixed = TRUE)))
-    
+
     rhs_controls <- gsub("\\([^)]*\\)", "", rhs_main)
     ctrls_raw    <- trimws(unlist(strsplit(rhs_controls, "+", fixed = TRUE)))
     out$controls <- setdiff(ctrls_raw, c(out$treat, ""))
-    
+
     # Enforce that the IV endogenous variable equals d
     if (!all(out$treat == d)){
       stop(
@@ -395,14 +396,14 @@ extract_iv <- function(reg_formula, d){
         d, "'."
       )
     }
-    
+
   } else {
     # OLS branch
     vars <- trimws(unlist(strsplit(rhs_main, "+", fixed = TRUE)))
     vars <- vars[nzchar(vars)]
     out$controls <- setdiff(vars, d)
-    
-    # If user DID NOT include the treatment, we will auto-add it AND warn 
+
+    # If user DID NOT include the treatment, we will auto-add it AND warn
     if (!any(vars == d)){
       out$added_treat <- TRUE
       warning(
