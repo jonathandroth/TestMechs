@@ -984,7 +984,7 @@ find_treatment_position <- function(name_vec, d) {
     return(match(d, name_vec))
   }
 
-  matches <- grepl(paste0(d, " ="), name_vec, fixed = FALSE)
+  matches <- grepl(paste0("fit_", d), name_vec, fixed = FALSE)
   if (any(matches)) {
     return(which(matches)[1])
   }
@@ -1058,7 +1058,6 @@ get_beta.obs_fn <- function(yvec, dvec, mvec, df, d, reg_formula = NULL, inequal
   if(!is.null(reg_formula)){
     #Use regression approach
     #Parse reg_formula to check for IV or covariates
-    #iv_spec <- extract_iv(reg_formula, d)
 
     #XX should do some basic sanity checks on the regression spec here
 
@@ -1082,7 +1081,6 @@ get_beta.obs_fn <- function(yvec, dvec, mvec, df, d, reg_formula = NULL, inequal
    if(!is.null(reg_formula)){
     #Use regression approach
     #Parse reg_formula to check for IV or covariates
-    #iv_spec <- extract_iv(reg_formula, d)
     p_ym_1_vec <- compute_regression_probs(df, yvec, mvec, my_values, d, reg_formula, treated_transform)
       } else{
     # Use original frequency approach (randomized D)
@@ -1132,71 +1130,6 @@ get_beta.obs_fn <- function(yvec, dvec, mvec, df, d, reg_formula = NULL, inequal
 
   return(beta.obs)
 }
-
-# parse OLS/IV regression formula for fixest
-extract_iv <- function(reg_formula, d){
-  reg_str <- if (inherits(reg_formula, "formula")) {
-    paste(deparse(reg_formula), collapse = " ")
-  } else {
-    as.character(reg_formula)
-  }
-  reg_str <- trimws(sub("^~", "", reg_str))  # drop leading "~"
-
-  # split by pipe if user left FE / etc (we ignore tail)
-  split_pipe <- strsplit(reg_str, "\\|", fixed = FALSE)[[1]]
-  rhs_main   <- trimws(split_pipe[1])
-
-  # Initialize output
-  out <- list(is_iv    = FALSE,
-              treat    = d,
-              instr    = character(0),
-              controls = character(0),
-              added_treat  = FALSE)
-
-  # detect "( ... = ... )"
-  if (grepl("\\([^)]*=[^)]*\\)", rhs_main)) {
-    # IV branch
-    out$is_iv <- TRUE
-    iv_part <- sub(".*\\(([^)]*)\\).*", "\\1", rhs_main)
-    sides   <- strsplit(iv_part, "=", fixed = TRUE)[[1]]
-
-    out$treat <- trimws(unlist(strsplit(sides[1], "+", fixed = TRUE)))
-    out$instr <- trimws(unlist(strsplit(sides[2], "+", fixed = TRUE)))
-
-    rhs_controls <- gsub("\\([^)]*\\)", "", rhs_main)
-    ctrls_raw    <- trimws(unlist(strsplit(rhs_controls, "+", fixed = TRUE)))
-    out$controls <- setdiff(ctrls_raw, c(out$treat, ""))
-
-    # Enforce that the IV endogenous variable equals d
-    if (!all(out$treat == d)){
-      stop(
-        "In IV syntax, the endogenous treatment inside '(...=...)' must equal d = '",
-        d, "'."
-      )
-    }
-
-  } else {
-    # OLS branch
-    vars <- trimws(unlist(strsplit(rhs_main, "+", fixed = TRUE)))
-    vars <- vars[nzchar(vars)]
-    out$controls <- setdiff(vars, d)
-
-    # If user DID NOT include the treatment, we will auto-add it AND warn
-    if (!any(vars == d)){
-      out$added_treat <- TRUE
-      warning(
-        "The treatment variable '", d, "' was not found in the provided reg_formula;",
-        "I have added it as a regressor. Please edit reg_formula if that was not your intention."
-      )
-    }
-  }
-  # Final sanity check
-  if (!d %in% c(out$treat, out$controls)) {
-    stop("Treatment variable '", d, "' not found in reg_formula. Please include it.")
-  }
-  out
-}
-
 
 #Function to get the IFs for beta_obs and its subcomponents
 get_IFs <- function(yvec, dvec, mvec, df, d, reg_formula = NULL, my_values, mvalues = unique(my_values$m),

@@ -176,7 +176,7 @@ test_that("fixest control and IV specifications align for nonbinary M", {
     method = "CS",
     num_Ybins = 5,
     cluster = "uc",
-    reg_formula = "~ (treat = treativ) | interviewer"
+    reg_formula = "~ 1 | interviewer | treat ~ treativ"
   )
 
   expect_equivalent_results(controls_res, fe_res, iv_res)
@@ -215,7 +215,7 @@ test_that("fixest control and IV specifications align for binary M", {
     method = "CS",
     num_Ybins = 5,
     cluster = "uc",
-    reg_formula = "~ (treat = treativ) | interviewer"
+    reg_formula = "~ 1 | interviewer | treat ~ treativ"
   )
 
   expect_equivalent_results(controls_res, fe_res, iv_res)
@@ -269,7 +269,7 @@ test_that("lb_frac_affected respects regression choices", {
     m = "relationship_husb",
     y = "motherfinancial",
     num_Ybins = 5,
-    reg_formula = "~ (treat=treativ) | interviewer",
+    reg_formula = "~ 1 | interviewer | treat ~ treativ",
     allow_min_defiers = TRUE
   )
 
@@ -322,7 +322,7 @@ test_that("bounds_ade_ats agrees across reg specs", {
                         reg_formula = "~ treat | interviewer")
   iv <- bounds_ade_ats(df = datasets$mother_data |> dplyr::mutate(treativ = treat), d = "treat", y = "motherfinancial",
                        m= "relationship_husb", at_group = 5,
-                       reg_formula = "~ (treat=treativ) | factor(interviewer)")
+                       reg_formula = "~ 1 | factor(interviewer) | treat ~ treativ")
   expect_equivalent_results(controls, fes, iv)
 })
 

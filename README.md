@@ -364,7 +364,7 @@ test_result_both <- test_sharp_null(df = mother_data,
 
 test_result_both$pval
 #>           [,1]
-#> [1,] 0.6540865
+#> [1,] 0.6540863
 ```
 
 With a p-value of 0.654, we cannot reject the sharp null that the
@@ -447,12 +447,12 @@ test_result_gm_iv <- test_sharp_null(df = mother_data,
                                        d = "treat",
                                        m = "grandmother",
                                        y = "motherfinancial",
-                                       reg_formula = "~ age_baseline + edu_mo_baseline + wealth_baseline + (treat = iv)", #iv spec
+                                       reg_formula = "~ age_baseline + edu_mo_baseline + wealth_baseline | treat ~ iv", #iv spec
                                        method = "CS",
                                        num_Ybins = 5,
                                        cluster = "uc")
 
 test_result_gm_iv$pval
-#>            [,1]
-#> [1,] 0.03082124
+#>           [,1]
+#> [1,] 0.0311524
 ```
