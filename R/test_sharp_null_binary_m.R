@@ -1,7 +1,7 @@
 #' @title Hypothesis test for the sharp null
 #' @description This function tests the sharp null of Y(1,m) = Y(0,m). The
 #'   outcome and mediator are both assumed to take finitely many different
-#'   values. The mediator is assuemd to be binary. 
+#'   values. The mediator is assuemd to be binary.
 #'   The inference is via Cox and Shi (2023) OR Andrews, Roth, and Pakes OR FSST.
 #' @param df A data frame
 #' @param d Name of the treatment variable in the df
@@ -44,17 +44,17 @@ test_sharp_null_binary_m <- function(df,
                                      analytic_variance = FALSE,    # arp cs arg
                                      refinement = FALSE    #cs arg
                                      ){
-  
+
   ## Remove missing
   df <- remove_missing_from_df(df = df,
                                d = d,
                                m = m,
                                y = y)
-  
+
   ## Pre-processing
   yvec <- df[[y]]
   n <- length(yvec)
-  
+
   if(!is.null(num_Ybins)){
     yvec <- discretize_y(yvec = yvec, numBins = num_Ybins)
     df[[y]] <- yvec
@@ -67,7 +67,7 @@ test_sharp_null_binary_m <- function(df,
       df[[y]] <- yvec
     }
   }
-  
+
   if (is.null(cluster)) {
     clustervec <- 1:length(yvec)
   } else {
@@ -75,50 +75,37 @@ test_sharp_null_binary_m <- function(df,
   }
   dvec <- df[[d]]
   mvec <- df[[m]]
-  
+
   yvalues <- sort(unique(yvec))
   mvalues <- unique(mvec)
   my_values <- purrr::cross_df(list(m=mvalues,y=yvalues)) %>%
     dplyr::arrange(m,y) %>%
     dplyr::select(y,m)
-  
-  
+
+
   ## Define function for beta.obs
-  get_beta.obs <- function(yvec, dvec, mvec, df, d, yvalues, reg_formula) {
-    if (!is.null(reg_formula)) {
-      # Use shared regression helpers from test_sharp_null.R
-      p_ym_0_vec <- compute_regression_probs(df, yvec, mvec, my_values, d, reg_formula, control_transform)
-      p_ym_1_vec <- compute_regression_probs(df, yvec, mvec, my_values, d, reg_formula, treated_transform)
-    }
+  get_beta.obs <- function(yvec, dvec, mvec) {
+    #Get partial density for Y,M=1|D=1
+    p_y1_1 <- purrr::map_dbl(.x = 1:length(yvalues),
+                             .f = ~mean(yvec[dvec == 1] == yvalues[.x]
+                                        & mvec[dvec == 1] == 1 ))
 
-    # Get partial density for Y,M = 1 | D = d
-    if (is.null(reg_formula)) {
-      p_y1_1 <- purrr::map_dbl(.x = 1:length(yvalues),
+    #Get partial density for Y,M=1|D=0
+    p_y1_0 <- purrr::map_dbl(.x = 1:length(yvalues),
+                             .f = ~mean(yvec[dvec == 0] == yvalues[.x]
+                                        & mvec[dvec == 0] == 1 ))
+
+    if(!ats_only){
+      #Get partial density for Y,M=0|D=1
+      p_y0_1 <- purrr::map_dbl(.x = 1:length(yvalues),
                                .f = ~mean(yvec[dvec == 1] == yvalues[.x]
-                                          & mvec[dvec == 1] == 1 ))
-      p_y1_0 <- purrr::map_dbl(.x = 1:length(yvalues),
-                               .f = ~mean(yvec[dvec == 0] == yvalues[.x]
-                                          & mvec[dvec == 0] == 1 ))
-    } else {
-      # Rows with M = 1 map to the p_y1_1 / p_y1_0 probabilities
-      p_y1_1 <- p_ym_1_vec[my_values$m == 1]
-      p_y1_0 <- p_ym_0_vec[my_values$m == 1]
-    }
+                                          & mvec[dvec == 1] == 0 ))
 
-    if (!ats_only) {
-      # Get partial density for Y,M = 0 | D = d
-      if (is.null(reg_formula)) {
-        p_y0_1 <- purrr::map_dbl(.x = 1:length(yvalues),
-                                 .f = ~mean(yvec[dvec == 1] == yvalues[.x]
-                                            & mvec[dvec == 1] == 0 ))
-        p_y0_0 <- purrr::map_dbl(.x = 1:length(yvalues),
-                                 .f = ~mean(yvec[dvec == 0] == yvalues[.x]
-                                            & mvec[dvec == 0] == 0 ))
-      } else {
-        # Rows with M = 0 map to the p_y0_1 / p_y0_0 probabilities
-        p_y0_1 <- p_ym_1_vec[my_values$m == 0]
-        p_y0_0 <- p_ym_0_vec[my_values$m == 0]
-      }
+      #Get partial density for Y,M=0|D=0
+      p_y0_0 <- purrr::map_dbl(.x = 1:length(yvalues),
+                               .f = ~mean(yvec[dvec == 0] == yvalues[.x]
+                                          & mvec[dvec == 0] == 0 ))
+
     }
     #We return differences in partial densities that should be positive
     if(ats_only){
@@ -126,45 +113,35 @@ test_sharp_null_binary_m <- function(df,
     }else{
       beta.obs <- c(p_y0_0 - p_y0_1,
                     p_y1_1 - p_y1_0)
-      
+
     }
     return(beta.obs)
   }
-  
-  
-  ## Bootstrap the betas (computed lazily when needed)
-  beta.obs_list <- NULL
-  get_bootstrap_draws <- function() {
-    if (is.null(beta.obs_list)) {
-      beta.obs_list <<- compute_bootstrap_draws_clustered(
-        f = function(df, d, y, m, ...) {
-          get_beta.obs(
-            df[[y]],
-            df[[d]],
-            df[[m]],
-            df,
-            d,
-            yvalues,
-            reg_formula = reg_formula
-          )
-        },
-        df = df,
-        d = d,
-        m = m,
-        y = y,
-        cluster = cluster,
-        numdraws = B,
-        fix_n1 = fix_n1,
-        return_df = F
-      )
-    }
-    beta.obs_list
-  }
-  
+
   ## Get beta.obs using actual data
-  beta.obs <- get_beta.obs(yvec, dvec, mvec, df, d, yvalues, reg_formula)
-  
-  
+  beta.obs <- get_beta.obs(yvec, dvec, mvec)
+
+
+  if(!analytic_variance){
+  ## Bootstrap the betas
+  beta.obs_list <- compute_bootstrap_draws_clustered(f =
+                                                       function(df,d,y,m,...){get_beta.obs(
+                                                         df[[y]],
+                                                         df[[d]],
+                                                         df[[m]])},
+                                                     df = df,
+                                                     d = d,
+                                                     m = m,
+                                                     y = y,
+                                                     cluster = cluster,
+                                                     numdraws = B,
+                                                     fix_n1 = fix_n1,
+                                                     return_df = F)
+
+
+  }
+
+
   ## Get analytic variance for arp and cs
   if (method %in% c("ARP", "CS")) {
     # Get variance matrix of the beta.obs bootsraps
@@ -180,16 +157,22 @@ test_sharp_null_binary_m <- function(df,
                                      inequalities_only = TRUE,
                                      clustervec = clustervec,
                                      exploit_binary_m = TRUE)
-      
-    } else {
-      beta.obs_list <- get_bootstrap_draws()
+
+      if (method == "CS" & print_both_var) {
+        sigma.obs_boot <- stats::cov(base::Reduce(base::rbind,
+                                                  beta.obs_list))
+        print(sigma.obs)
+        print(sigma.obs_boot)
+      }
+    }
+    else {
       sigma.obs <- stats::cov(base::Reduce(base::rbind,
                                            beta.obs_list))
     }
   }
-  
-  
-  
+
+
+
   ## Run the respective tests
   if (method == "FSST") {
     beta.obs_list <- get_bootstrap_draws()
@@ -199,14 +182,14 @@ test_sharp_null_binary_m <- function(df,
     # Get variance matrix of the beta.obs bootsraps
     sigma.obs <- stats::cov(base::Reduce(base::rbind,
                                          beta.obs_list))
-    
+
     # Run fsst test
     A.obs <- diag(length(beta.obs))
     A.shp <- matrix(0, ncol = ncol(A.obs))
     A.tgt <- matrix(0, ncol = ncol(A.obs))
-    
+
     beta.shp <- 0
-    
+
     lpm <- lpinfer::lpmodel(A.obs = A.obs,
                             A.shp = A.shp,
                             A.tgt = A.tgt,
@@ -217,20 +200,22 @@ test_sharp_null_binary_m <- function(df,
     } else if (lambda == "ndd") {
       lambda <- 1/sqrt(log(max(length(beta.obs), exp(1))) * log(max(exp(1), log(max(exp(1), n)))))
     }
-    
+
     fsst_result <- lpinfer::fsst(n = n, lpmodel = lpm, beta.tgt = 0, R = B,
                                  weight.matrix = weight.matrix, lambda = lambda)
-    
+
     return(list(result = fsst_result, reject = (fsst_result$pval[1, 2] < alpha)))
-  } else if (method == "ARP") {
+  }
+
+  else if (method == "ARP") {
     if(use_hybrid){
       lf_cv <- HonestDiD:::.compute_least_favorable_cv(X_T = matrix(0,nrow = length(beta.obs)),
                                                        sigma = sigma.obs,
                                                        hybrid_kappa = kappa
       )
-      
+
       hybrid_list <- list(hybrid_kappa = kappa, lf_cv = lf_cv)
-      
+
       arp <- HonestDiD:::.lp_conditional_test_fn(theta = 0,
                                                  y_T = -beta.obs,
                                                  X_T = matrix(0,nrow = length(beta.obs)),
@@ -246,10 +231,12 @@ test_sharp_null_binary_m <- function(df,
                                                  sigma = sigma.obs,
                                                  alpha = alpha,
                                                  hybrid_flag = "ARP")
-      
+
     }
     return(arp)
-  } else if (method == "CS") {
+  }
+
+  else if (method == "CS") {
     #Run Cox and Shi test
     coxandshi <- cox_shi_nonuisance(Y = -beta.obs,
                                     sigma = sigma.obs,

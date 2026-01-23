@@ -53,8 +53,8 @@ test_sharp_null <- function(df,
                             new_dof_CS = FALSE,
                             use_binary = NULL,
                             frac_ATs_affected = NULL){
-
-  ## Process the inputted df ----
+ 
+  ## Process the inputted df ----  
   # Remove missing values
   df <- remove_missing_from_df(df = df,
                                d = d,
@@ -78,7 +78,7 @@ test_sharp_null <- function(df,
 
   ## Set frac_ATs_affected to NULL for now, will allow for other values later on
   ## frac_ATs_affected <- NULL
-
+  
   ## Do not run the binary test when frac_ATs_affected is not null, since we want to test for the fraction of always-takers
   if (!is.null(frac_ATs_affected) | !(max_defiers_share == 0)) {
     if (method == "toru") {
