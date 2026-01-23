@@ -18,10 +18,9 @@
 #'   are "diag", "avar", "identity." Defaults is "diag" as in FSST.
 #'  @param num_Ybins (Optional) If specified, Y is discretized into the given number of bins (if num_Ybins is larger than the number of unique values of Y, no changes are made)
 #'  @param refinement (Optional) If TRUE, use the refined Cox & Shi test (rCC rather than CC). Default is FALSE.
-#' @export
 test_sharp_null_coxandshi_binary_m <- function(df,
-                                         d,
-                                         m,
+                                              d,
+                                              m,
                                          y,
                                          ordering = NULL,
                                          B = 500,

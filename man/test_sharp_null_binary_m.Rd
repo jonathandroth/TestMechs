@@ -13,6 +13,7 @@ test_sharp_null_binary_m(
   ordering = NULL,
   B = 500,
   cluster = NULL,
+  reg_formula = NULL,
   weight.matrix = "diag",
   ats_only = F,
   alpha = 0.05,
@@ -22,8 +23,7 @@ test_sharp_null_binary_m(
   fix_n1 = T,
   lambda = "dd",
   analytic_variance = FALSE,
-  refinement = FALSE,
-  print_both_var = FALSE
+  refinement = FALSE
 )
 }
 \arguments{
@@ -48,14 +48,15 @@ ordering is used.}
 
 \item{cluster}{Cluster for bootstrap}
 
+\item{reg_formula}{Regression formula for the non-experimental setting}
+
 \item{weight.matrix}{Weight matrix used to implement FSST. Possible options
  are "diag", "avar", "identity." Defaults is "diag" as in FSST.
 @param num_Ybins (Optional) If specified, Y is discretized into the given number of bins (if num_Ybins is larger than the number of unique values of Y, no changes are made)
 @param fix_n1 Whether the number of treated units (or clusters) should be fixed in the bootstrap
 @param lambda (For FSST only) A string variable, either dd or ndd, standing for data-driven or non-data driven respectively.
 @param analytic_variance (For CS or ARP only) A flag indicating whether to use analytic variance.
-@param refinement (For CS only, optional) If TRUE, use the refined Cox & Shi test (rCC rather than CC). Default is FALSE.
-@param print_both_var (For CS only, Optional) If TRUE, print sigma from both actual and bootstrapped data.}
+@param refinement (For CS only, optional) If TRUE, use the refined Cox & Shi test (rCC rather than CC). Default is FALSE.}
 }
 \description{
 This function tests the sharp null of Y(1,m) = Y(0,m). The

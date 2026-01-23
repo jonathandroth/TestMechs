@@ -14,11 +14,14 @@ by Soonwoo Kwon and Jonathan Roth. The package provides tests for the
 treatment operates through a particular conjectured mechanism (or set of
 mechanisms) M. It also provides lower bounds on the fraction of
 “always-takers” who are affected by the treatment despite having the
-same value of M regardless of treatment status. For now, the package
-assumes that the treatment is as good as randomly assigned (as in an
-RCT); we hope to add support for conditional random assignment in future
-iterations of the package. Note that the approach in the paper requires
-the mediator $M$ to be discrete.
+same value of M regardless of treatment status. All core functions in
+the package — test_sharp_null(), lb_frac_affected(), and
+partial_density_plot() — support conditional random assignment and
+accept a reg_formula argument. When you provide a formula, the package
+regression-adjusts the relevant partial probabilities using OLS or IV.
+Note that the approach in the paper requires the mediator $M$ to be
+discrete. If reg_formula is omitted, the functions assume that the
+treatment is as good as randomly assigned (as in an RCT).
 
 ## Installation
 
@@ -43,9 +46,11 @@ In Baranov et al. (2020), $D$ is a treatment for depression and $Y$ is
 an index of outcomes for women’s financial empowerment. We are
 interested in whether the effect of $D$ on $Y$ can be explained by a
 mediator, or set of mediators, $M$. We consider three choices for $M$:
-(a) the presence of a grandmother in the home, (b)relationship quality
+(a) the presence of a grandmother in the home, (b) relationship quality
 with the woman’s husband, and (c) the combination of these two
 mechanisms.
+
+## Randomly-assigned setting
 
 We start with loading the required packages and the data.
 
@@ -78,9 +83,11 @@ plot the partial densities to visually detect potential violations of
 the *sharp null*, 2) `test_sharp_null()` to conduct a statistical test
 for the *sharp null* and 3) `lb_frac_affected()` to compute the sharp
 lower bound for the fraction of always-takers (or never-takers) that are
-affected by treatment. While this example covers the basic usage of
-these functions, please refer to the documentation of each function
-(e.g., `?test_sharp_null`) for a more detailed description.
+affected by treatment. Each function can be adjusted for conditional
+random assignment by providing a reg_formula if needed (e.g., adding
+baseline covariates or instruments). While this example covers the basic
+usage of these functions, please refer to the documentation of each
+function (e.g., `?test_sharp_null`) for a more detailed description.
 
 ### Graphical Evidence
 
@@ -88,7 +95,7 @@ We first provide graphical evidence using a partial density plot using
 the function `partial_density_plot()`. When $M$ is binary, such
 (partial) density plots are often helpful to understand where the
 violations of the *sharp null* are coming from. The following snippet
-reproduces Figure 3 of the main paper.
+reproduces Figure 3 of the paper.
 
 ``` r
 nt_plot <-
@@ -212,12 +219,11 @@ mechanisms?To give a sense, we now compute lower bounds on the fraction
 of never-takers whose outcome is affected by the treatment despite
 having the same value of $M$ under both treatments. This gives a sense
 of the strength of mechanisms other than $M$: it tells us what fraction
-of the never-takers have a direct effect of the treatment. The
-definition of the lower bounds can be found in Section 3.1 of the paper.
-The function `lb_frac_affected` computes (a point estimate of) this
-lower bound. The argument `at_group = 0` corresponds to computing this
-lower bound for the never-takers, who are referred to as “0-always
-takers” in the more general notation in the paper.
+of the never-takers have a direct effect of the treatment. The function
+`lb_frac_affected` computes a point estimate of this lower bound. The
+argument `at_group = 0` corresponds to computing this lower bound for
+the never-takers, who are referred to as “0-always takers” in the more
+general notation in the paper.
 
 ``` r
 lb_nts <- lb_frac_affected(df = mother_data,
@@ -342,9 +348,9 @@ discretization of $M$.
 
 ### Combination of both mechanisms
 
-Finally, we test the null hypothesis that the treatment effect is
-explained by the combination of the two mechanisms. This is done by
-passing a vector of variables names for the `m` argument.
+Next, we test the null hypothesis that the treatment effect is explained
+by the combination of the two mechanisms. This is done by passing a
+vector of variables names for the `m` argument.
 
 ``` r
 test_result_both <- test_sharp_null(df = mother_data,
@@ -358,7 +364,7 @@ test_result_both <- test_sharp_null(df = mother_data,
 
 test_result_both$pval
 #>           [,1]
-#> [1,] 0.6540865
+#> [1,] 0.6540863
 ```
 
 With a p-value of 0.654, we cannot reject the sharp null that the
@@ -382,3 +388,71 @@ lb_frac_both
 
 We estimate a lower bound of 7 percent, although this does not appear to
 be statistically significant given the test result above.
+
+## Non-experimental setting
+
+The examples above focus on data from a randomized controlled trial,
+where treatment $D$ is randomly assigned. TestMech assumes by default
+that we have an RCT, and treatment effects are estimated by comparing
+means for the treated and control group. However, TestMechs can also be
+applied in settings where we have conditional randomization given
+covariates or an instrumental variable for the treatment. Specifically,
+the core functions of the package allow for the `reg_formula` argument,
+which allows the researcher to provide a regression formula (or IV
+formula) to estimate treatment effects after adjusting linearly for
+observable characteristics. The `reg_formula` argument is passed to the
+`fixest` package to estimate treatment effects, and thus accommodates
+`fixest` functionality, including IV and high-dimensional fixed effects.
+While adjusting for covariates is not necessary in our running example,
+which is an RCT, we can still adjust for covariates to increase
+precision. Below we show how this is done using the baseline covariates
+`age_baseline`, `edu_mo_baseline`, and `wealth_baseline`. For brevity,
+we focus on testing the sharp null using covariates using the function
+`test_sharp_null()`, although the `reg_formula` result can analogously
+be passed to the functions `partial_density_plot()` and
+`lb_frac_affected()`.
+
+``` r
+test_result_gm_ols <- test_sharp_null(df = mother_data,
+                                       d = "treat",
+                                       m = "grandmother",
+                                       y = "motherfinancial",
+                                       reg_formula = "~ treat + age_baseline + edu_mo_baseline + wealth_baseline",   
+                                       method = "CS",
+                                       num_Ybins = 5,
+                                       cluster = "uc")
+#> Loading required package: lpinfer
+test_result_gm_ols$pval
+#>            [,1]
+#> [1,] 0.03105106
+```
+
+The key new argument is
+`reg_formula = "~ treat + age_baseline + edu_mo_baseline + wealth_baseline"`.
+This says that we should estimate the effect of the treatment (`treat`)
+on $Y$ and $M$ (or functions thereof) by running a regression with the
+treatment variable and baseline controls on the right-hand side.
+
+We can also use `reg_formula` to estimate treatment effects using
+instrumental variables. To illustrate how this works, we create an
+instrumental variable `iv` equal to the true treatment variable plus
+noise. We now modify the `reg_formula` argument to use `iv` as an
+instrument for `treat`.
+
+``` r
+set.seed(0)
+mother_data$iv <- mother_data$treat + rnorm(n = length(mother_data$treat), sd = 0.1) #iv = treat + noise
+
+test_result_gm_iv <- test_sharp_null(df = mother_data,
+                                       d = "treat",
+                                       m = "grandmother",
+                                       y = "motherfinancial",
+                                       reg_formula = "~ age_baseline + edu_mo_baseline + wealth_baseline | treat ~ iv", #iv spec
+                                       method = "CS",
+                                       num_Ybins = 5,
+                                       cluster = "uc")
+
+test_result_gm_iv$pval
+#>           [,1]
+#> [1,] 0.0311524
+```

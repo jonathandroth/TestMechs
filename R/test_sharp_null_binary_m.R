@@ -16,6 +16,7 @@
 #'   ordering is used.
 #' @param B Bootstrap size, default is zero
 #' @param cluster Cluster for bootstrap
+#' @param reg_formula Regression formula for the non-experimental setting
 #' @param weight.matrix Weight matrix used to implement FSST. Possible options
 #'   are "diag", "avar", "identity." Defaults is "diag" as in FSST.
 #'  @param num_Ybins (Optional) If specified, Y is discretized into the given number of bins (if num_Ybins is larger than the number of unique values of Y, no changes are made)
@@ -23,9 +24,6 @@
 #'  @param lambda (For FSST only) A string variable, either dd or ndd, standing for data-driven or non-data driven respectively.
 #'  @param analytic_variance (For CS or ARP only) A flag indicating whether to use analytic variance.
 #'  @param refinement (For CS only, optional) If TRUE, use the refined Cox & Shi test (rCC rather than CC). Default is FALSE.
-#'  @param print_both_var (For CS only, Optional) If TRUE, print sigma from both actual and bootstrapped data.
-#' @export
-
 test_sharp_null_binary_m <- function(df,
                                      d,
                                      m,
@@ -34,6 +32,7 @@ test_sharp_null_binary_m <- function(df,
                                      ordering = NULL,
                                      B = 500,
                                      cluster = NULL,
+                                     reg_formula = NULL,
                                      weight.matrix = "diag",
                                      ats_only = F,
                                      alpha = 0.05,
@@ -43,8 +42,7 @@ test_sharp_null_binary_m <- function(df,
                                      fix_n1 = T,
                                      lambda = "dd",    #fsst arg
                                      analytic_variance = FALSE,    # arp cs arg
-                                     refinement = FALSE,    #cs arg
-                                     print_both_var = FALSE    #cs arg
+                                     refinement = FALSE    #cs arg
                                      ){
 
   ## Remove missing
@@ -152,6 +150,9 @@ test_sharp_null_binary_m <- function(df,
       sigma.obs <- analytic_variance(yvec = yvec,
                                      dvec = dvec,
                                      mvec = mvec,
+                                     df = df,
+                                     d = d,
+                                     reg_formula = reg_formula,
                                      my_values = my_values,
                                      inequalities_only = TRUE,
                                      clustervec = clustervec,
@@ -174,6 +175,7 @@ test_sharp_null_binary_m <- function(df,
 
   ## Run the respective tests
   if (method == "FSST") {
+    beta.obs_list <- get_bootstrap_draws()
     # Join beta.obs from actual and boostrapped data
     beta.obs_FSST <- c(list(beta.obs), beta.obs_list)
 

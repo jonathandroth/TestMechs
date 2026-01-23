@@ -11,6 +11,7 @@
 #' @param y Name of the outcome variable
 #' @param w (Optional) Name of weighting variable. If null, equal weights are
 #'   used
+#' @param reg_formula (Optional) Regression formula. The default is null.
 #' @param at_group (Optional) Value of m specifying which always-takers to
 #'   compute lower bounds of TV for.  If at_group is specified, then we compute
 #'   a lower bound on TV between Y(1,at_group) and Y(0,at_group) for ATs who
@@ -18,7 +19,7 @@
 #'   lower bound on the weighted average of TV across all always-takers, with
 #'   weights proportional to shares in population
 #' @param continuous_Y (Optional) Whether Y should be treated as continuous, in
-#'   which case kernel density is used, or discrete. Default is TRUE.
+#'   which case kernel density is used, or discrete. Default is FALSE.
 #' @param num_Ybins (Optional) If specified, Y is discretized into the given
 #'   number of bins (if num_Ybins is larger than the number of unique values of
 #'   Y, no changes are made)
@@ -27,7 +28,7 @@
 #' @param allow_min_defiers (Optional) If the bound on defiers
 #'   (max_defier_share) is inconsistent with the data, proceed by allowing the
 #'   minimum number of defiers compatible with the data. Otherwise, throw an
-#'   error. Default is FALSE
+#'   error. Default is TRUE
 #' @param return_min_defiers (Optional) If true, the function returns the
 #'   minimum number of defiers consistent with the data rather than the TV
 #'   bounds
@@ -39,10 +40,11 @@ lb_frac_affected <- function(df,
                              y,
                              at_group = NULL,
                              w = NULL,
-                             continuous_Y = base::ifelse(is.null(num_Ybins),TRUE,FALSE),
+                             reg_formula = NULL,
+                             continuous_Y = FALSE,
                              num_Ybins = NULL,
                              max_defiers_share = 0,
-                             allow_min_defiers = FALSE,
+                             allow_min_defiers = TRUE,
                              return_min_defiers = FALSE){
 
   df <- remove_missing_from_df(df = df,
@@ -53,10 +55,27 @@ lb_frac_affected <- function(df,
 
 
   yvec <- df[[y]]
+  n <- NROW(yvec)
 
+  #Discretize y if needed
   if(!is.null(num_Ybins)){
     yvec <- discretize_y(yvec = yvec, numBins = num_Ybins)
     df[[y]] <- yvec
+  } else {
+    continuous_y_flag <- n / length(unique(yvec)) <= 30
+    if (!continuous_Y && continuous_y_flag) {
+      message("continous_Y is set to FALSE but the outcome appears to be continuous. We are discretizing using 5 bins.
+              You can change the number of bins by setting the num_Ybins argument, or specify continuous_Y = TRUE to
+              use kernel density estimates tailored for continuous variables." )
+      num_Ybins <- 5
+      yvec <- discretize_y(yvec = yvec, numBins = num_Ybins)
+      df[[y]] <- yvec
+    }
+  }
+
+  # reg_formula only for discrete Y
+  if (!is.null(reg_formula) && continuous_Y) {
+  stop("reg_formula is only allowed when Y is discrete; ignoring reg_formula and proceeding with the randomized estimator.")
   }
 
   dvec <- df[[d]]
@@ -68,11 +87,26 @@ lb_frac_affected <- function(df,
     wvec <- df[[w]]
   }
 
+  if(is.null(reg_formula) || continuous_Y){
   max_p_diffs_list <- compute_max_p_difference(dvec = dvec,
                                                mdf = mdf,
                                                yvec = yvec,
                                                wvec=wvec,
                                                continuous_Y = continuous_Y)
+  }else{
+    max_p_diffs_list <- compute_max_p_difference_reg(
+      dvec = dvec,
+      mdf = mdf,
+      yvec = yvec,
+      wvec = wvec,
+      continuous_Y = continuous_Y,
+      df = df,
+      d = d,
+      y = y,
+      reg_formula = reg_formula
+    )
+  }
+
   max_p_diffs <- max_p_diffs_list$max_p_diffs
   mvalues <- max_p_diffs_list$mvalues
 
@@ -97,25 +131,48 @@ lb_frac_affected <- function(df,
     #m1_types <- m1_types[monotonic_types,]
 
 
-    #Compute the marginal distribution of M among D=1
-    p_m_1_fn <- function(mvalue){
-      mdf1 <- mdf[dvec ==1, , drop = FALSE]
-      M_equals_mvalue <- sapply(1:NROW(mdf1), function(i){all(mdf1[i,]==mvalue)} )
-      return(stats::weighted.mean( x = M_equals_mvalue,
-                                   w = wvec[dvec == 1]/sum(wvec[dvec == 1])))
+    if (!is.null(reg_formula) &&
+        !continuous_Y) {
+      my_values <- max_p_diffs_list$my_values
+      p_ym_1_vec <- max_p_diffs_list$p_ym_1_vec
+      p_ym_0_vec <- max_p_diffs_list$p_ym_0_vec
+
+      p_m_1 <- vapply(
+        seq_len(nrow(mvalues)),
+        function(m_id) {
+          sum(p_ym_1_vec[my_values$m == m_id])
+        },
+        numeric(1)
+      )
+
+      p_m_0 <- vapply(
+        seq_len(nrow(mvalues)),
+        function(m_id) {
+          sum(p_ym_0_vec[my_values$m == m_id])
+        },
+        numeric(1)
+      )
+    } else {
+      #Compute the marginal distribution of M among D=1
+      p_m_1_fn <- function(mvalue){
+        mdf1 <- mdf[dvec ==1, , drop = FALSE]
+        M_equals_mvalue <- sapply(1:NROW(mdf1), function(i){all(mdf1[i,]==mvalue)} )
+        return(stats::weighted.mean( x = M_equals_mvalue,
+                                     w = wvec[dvec == 1]/sum(wvec[dvec == 1])))
+      }
+
+      p_m_1 <- base::apply(mvalues,1, p_m_1_fn)
+
+      #Compute the marginal distribution of M among D=0
+      p_m_0_fn <- function(mvalue){
+        mdf0 <- mdf[dvec ==0, , drop = FALSE]
+        M_equals_mvalue <- sapply(1:NROW(mdf0), function(i){all(mdf0[i,]==mvalue)} )
+        return(stats::weighted.mean( x = M_equals_mvalue,
+                                     w = wvec[dvec == 0]/sum(wvec[dvec == 0])))
+      }
+
+      p_m_0 <- base::apply(mvalues,1, p_m_0_fn)
     }
-
-    p_m_1 <- base::apply(mvalues,1, p_m_1_fn)
-
-    #Compute the marginal distribution of M among D=0
-    p_m_0_fn <- function(mvalue){
-      mdf0 <- mdf[dvec ==0, , drop = FALSE]
-      M_equals_mvalue <- sapply(1:NROW(mdf0), function(i){all(mdf0[i,]==mvalue)} )
-      return(stats::weighted.mean( x = M_equals_mvalue,
-                                   w = wvec[dvec == 0]/sum(wvec[dvec == 0])))
-    }
-
-    p_m_0 <- base::apply(mvalues,1, p_m_0_fn)
 
     ## We now calculate lower bounds on TV using either the group provided, or averaging across groups proportionally to share
     ## We consider an optimization where the first part of the optimization vector corresponds to the shares of complier types
@@ -467,9 +524,98 @@ compute_max_p_difference <- function(dvec, mdf, yvec, wvec=NULL,
 }
 
 
+compute_max_p_difference_reg <- function(dvec,
+                                         mdf,
+                                         yvec,
+                                         wvec = NULL,
+                                         continuous_Y = FALSE,
+                                         df,
+                                         d,
+                                         y,
+                                         reg_formula,
+                                         cluster = NULL,
+                                         ...){
+
+  if (continuous_Y) {
+    stop("reg_formula branch currently supports only discrete Y (continuous_Y = FALSE).")
+  }
+
+  if (is.null(wvec)) wvec <- rep(1, length(yvec))
+
+  # sanity: drop rows with NAs in key inputs to keep parity with simple branch
+  keep_rows <- stats::complete.cases(dvec, mdf, yvec, wvec)
+  dvec <- dvec[keep_rows]
+  yvec <- yvec[keep_rows]
+  wvec <- wvec[keep_rows]
+  mdf  <- mdf[keep_rows, , drop = FALSE]
+  df   <- df[keep_rows, , drop = FALSE]
+
+  # The regression helpers operate on a single integer-coded mediator. When the
+  # mediator is multivariate, we collapse each row to a string "key" and use it
+  # to map every observation onto the index of its unique mediator pattern.
+  mvalues <- unique(mdf)
+  row_key <- function(mat) {
+    # use "\r" as a separator because it is unlikely to appear in factor names
+    # or numeric representations, which prevents accidental key collisions
+    apply(mat, 1, function(row) paste(row, collapse = "\r"))
+  }
+  m_keys <- row_key(mdf)
+  mvalue_keys <- row_key(mvalues)
+  mvec <- match(m_keys, mvalue_keys)
+
+  # build the (y, m) grid expected by compute_regression_probs()
+  yvalues <- unique(yvec)
+  my_values <- base::expand.grid(
+    m = seq_len(nrow(mvalues)),
+    y = yvalues,
+    KEEP.OUT.ATTRS = FALSE,
+    stringsAsFactors = FALSE
+  )
+  my_values <- my_values[, c("y", "m")]
+
+  p_ym_0_vec <- compute_regression_probs(
+    df = df,
+    yvec = yvec,
+    mvec = mvec,
+    my_values = my_values,
+    d = d,
+    reg_formula = reg_formula,
+    transform_fun = control_transform
+  )
+
+  p_ym_1_vec <- compute_regression_probs(
+    df = df,
+    yvec = yvec,
+    mvec = mvec,
+    my_values = my_values,
+    d = d,
+    reg_formula = reg_formula,
+    transform_fun = treated_transform
+  )
+
+  positive_parts <- pmax(p_ym_1_vec - p_ym_0_vec, 0)
+  max_p_diffs <- vapply(
+    seq_len(nrow(mvalues)),
+    function(m_id) {
+      sum(positive_parts[my_values$m == m_id])
+    },
+    numeric(1)
+  )
+
+  list(
+    mvalues = mvalues,
+    max_p_diffs = max_p_diffs,
+    my_values = my_values,
+    p_ym_0_vec = p_ym_0_vec,
+    p_ym_1_vec = p_ym_1_vec
+  )
+}
+
+
+
 #' @export
 #' @title Finds the minimum number of defiers compatible with the sharp null
-#'@description This function finds the minimum value of max_defiers_share such that compute_tv_ats_multiple_m returns zero
+#'@description This function finds the minimum value of max_defiers_share such that lb_frac_affected returns zero
 #' @param df A data frame
 #' @param d Name of the treatment variable in the df
 #' @param m Vector of the mediator variable

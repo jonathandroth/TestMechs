@@ -1,7 +1,7 @@
 #' @title Hypothesis test for the sharp null of full mediation
 #' @description This function tests the sharp null that Y(1,m) = Y(0,m). The
 #'   outcome and mediator are both assumed to take finitely many different
-#'   values. Several options are available for infernece.
+#'   values. Several options are available for inference.
 #' @param df A data frame
 #' @param d Name of the treatment variable in the df
 #' @param m Name of the mediator variable(s)
@@ -11,6 +11,7 @@
 #' @param ordering A list with length equal to the cardinality of the support of the mediator variable. The name of each element corresponds to a point in the support, and each element is a vector that collects all m values that are less than or equal to this point. If ordering = NULL, the standard ordering is used. If length(m) > 1, then the default is the elementwise ordering.
 #' @param B Bootstrap size, default is 500
 #' @param cluster Cluster for bootstrap
+#' @param reg_formula Regression formula for the non-experimental setting.
 #' @param weight.matrix Weight matrix used to implement FSST. Possible options are "diag", "avar", "identity." Defaults is "diag" as in FSST.
 #' @param hybrid_kappa The first-stage size value of the ARP hybrid test. If NULL, the ARP conditional (non-hybrid) test is used. Default is alpha/10
 #' @param num_Ybins (Optional) If specified, Y is discretized into the given number of bins (if num_Ybins is larger than the number of unique values of Y, no changes are made)
@@ -36,6 +37,7 @@ test_sharp_null <- function(df,
                             ordering = NULL,
                             B = 500,
                             cluster = NULL,
+                            reg_formula = NULL,
                             weight.matrix = "diag",
                             hybrid_kappa = alpha/10,
                             num_Ybins = NULL,
@@ -57,18 +59,19 @@ test_sharp_null <- function(df,
   df <- remove_missing_from_df(df = df,
                                d = d,
                                m = m,
-                               y = y)
+                               y = y,
+                               reg_formula = if (!is.null(reg_formula)) stats::as.formula(paste(y, reg_formula)) else NULL)
 
-  
+
   ## Evaluate whether M is binary
   binary_M <- dplyr::n_distinct(df[m]) == 2
-  
+
   ## Throw error if M is non-binary but use_binary = TRUE
   if (!is.null(use_binary)) {
     if (use_binary == TRUE & binary_M == FALSE) {
       stop("M is non-binary in data, use_binary cannot be TRUE")
     }
-  } 
+  }
   else if (is.null(use_binary)) {
     use_binary = binary_M
   }
@@ -86,14 +89,14 @@ test_sharp_null <- function(df,
 
   ## Make sure lpinfer is installed if method == "FSST"
   if (method == "FSST" & !require(lpinfer)) {
-    stop("You must install pacakge lpinfer to use the FSST method. You can install it by running
+    stop("You must install package lpinfer to use the FSST method. You can install it by running
 devtools::install_github('conroylau/lpinfer')")
   }
-  
+
   ## Print confirmation, can delete this if you prefer
   ## message(paste0("It is ", binary_M, " that M in data is binary"))
   ## message(paste0("It is ", use_binary, " that binary test is used"))
-  
+
   ## Pass to more efficient algorithm when M is binary
   if (use_binary) {
     if (method %in% c("ARP", "CS", "FSST")) {
@@ -102,6 +105,7 @@ devtools::install_github('conroylau/lpinfer')")
                                          m,
                                          y,
                                          method = method,
+                                         reg_formula = reg_formula,
                                          ordering = ordering,
                                          B = B,
                                          cluster = cluster,
@@ -117,16 +121,20 @@ devtools::install_github('conroylau/lpinfer')")
       return(result)
     }
     else if (method == "toru") {
+      if(!is.null(reg_formula)){
+        stop("reg_formula should be NULL if method = toru")
+      }else{
       result <- test_sharp_null_toru(df, d, m, y, B = B, alpha = alpha,
                                      num_Ybins = NULL, cluster = cluster)
-      
+
       return(result)
+      }
     }
     else {
       stop("Method must be either ARP, CS, FSST or toru if use_binary = TRUE")
     }
   }
-  
+
   # Sample size
   n <- nrow(df)
 
@@ -149,7 +157,7 @@ devtools::install_github('conroylau/lpinfer')")
     df$m <- uni_m
     m <- "m"
   }
-  
+
   #Discretize y if needed
   if(!is.null(num_Ybins)){
     df[[y]] <- discretize_y(yvec = df[[y]], numBins = num_Ybins)
@@ -209,6 +217,9 @@ devtools::install_github('conroylau/lpinfer')")
   beta.obs <- get_beta.obs_fn(yvec = yvec,
                               dvec = dvec,
                               mvec = mvec,
+                              df = df,
+                              d = d,
+                              reg_formula = reg_formula,
                               inequalities_only = inequalities_only,
                               yvalues = yvalues,
                               mvalues = mvalues,
@@ -223,6 +234,9 @@ devtools::install_github('conroylau/lpinfer')")
           yvec = df[[y]],
           dvec = df[[d]],
           mvec = df[[m]],
+          df = df,
+          d = d,
+          reg_formula = reg_formula,
           inequalities_only = inequalities_only,
           yvalues = yvalues,
           mvalues = mvalues,
@@ -243,6 +257,9 @@ devtools::install_github('conroylau/lpinfer')")
     sigma.obs <- analytic_variance(yvec = yvec,
                                    dvec = dvec,
                                    mvec = mvec,
+                                   df = df,
+                                   d = d,
+                                   reg_formula = reg_formula,
                                    my_values = my_values,
                                    inequalities_only = inequalities_only,
                                    clustervec = clustervec)
@@ -261,7 +278,7 @@ devtools::install_github('conroylau/lpinfer')")
     } else {
       beta.obs_FSST <- c(list(beta.obs), beta.obs_list)
     }
-    
+
     lpm <- lpinfer::lpmodel(A.obs = A.obs,
                             A.shp = A.shp,
                             A.tgt = A.tgt,
@@ -344,7 +361,7 @@ devtools::install_github('conroylau/lpinfer')")
     }
 
     if(method == "CS"){
-      
+
       # We have beta - C_Z delta <= d_Z
       # C_Z = A; d_Z = 0
       # We want to define B_Z and m so that var(m) has full rank
@@ -353,7 +370,7 @@ devtools::install_github('conroylau/lpinfer')")
       ## Later, convert in C * delta <= m for to make use of the replication package
       C_Z <- A
       d_Z <- 0
-      
+
 
       if (min(base::eigen(sigma, only.values = T)$values) < 1e-08){
 
@@ -423,7 +440,7 @@ devtools::install_github('conroylau/lpinfer')")
       beta_red_star[abs(beta_red_star) < osqp_tol] <- 0
 
       if (new_dof_CS) {
-        
+
         Amat_aug <- rbind(Amat,
                           -cbind(matrix(0, nrow = d_nuis, ncol = ncol(B_Z)), diag(d_nuis)))
         u_aug <- c(u, rep(0, d_nuis))
@@ -433,18 +450,18 @@ devtools::install_github('conroylau/lpinfer')")
         ## I_Khat <- diag(ncol(Amat_aug))[Khat, , drop = FALSE]
 
         qr_tol <- 1e-5 # important; don't be too accurate
-        
+
         dof_n  <- qr(Amat_aug[Khat, ], tol = qr_tol)$rank -
                              qr(Amat_aug[Khat, -(1:ncol(B_Z))], tol = qr_tol)$rank
         cv_CC <- qchisq(1 - alpha, df = dof_n)
-        
+
         return(list(T_CC = T_CC,
                     cv_CC = cv_CC,
                     df = dof_n,
                     reject = (T_CC > cv_CC),
                     pval = 1-stats::pchisq(q = T_CC, df = dof_n)))
       }
-      
+
       # Equivalent expression
       ## T_CC <- qp$info$obj_val + t(beta_red) %*% sigmaInv %*% beta_red
 
@@ -712,7 +729,7 @@ construct_Aobs_Ashp_betashp <- function(yvec,
   # x = (theta, delta, zeta, kappa, eta)
   # zeta, kappa: nuisance par to convert inequalities to equalities
   # eta: nuisance par to create target par (= theta_kk TV_kk)
-  
+
   # If testing the fraction of ATs, then:
   # x = (theta, delta, zeta, kappa, eta, iota, gamma, epsilon)
   # iota: defined to be v_k theta_kk
@@ -721,7 +738,7 @@ construct_Aobs_Ashp_betashp <- function(yvec,
 
   par_lengths <- c("theta" = K^2, "delta" = d_y * K, "zeta" = K,
                    "kappa" = d_y * K, "eta" = K)
-  
+
   parameter_types <- c(rep("theta", par_lengths[["theta"]]),
                        rep("delta", par_lengths[["delta"]]),
                        rep("zeta", par_lengths[["zeta"]]),
@@ -733,14 +750,14 @@ construct_Aobs_Ashp_betashp <- function(yvec,
   zeta_indices <- which(parameter_types == "zeta")
   kappa_indices <- which(parameter_types == "kappa")
   eta_indices <- which(parameter_types == "eta")
-  
+
   # If testing the fraction of ATs, include the additional params
   if (!is.null(frac_ATs_affected)) {
-    
+
     # iota is eta in Jon's note, for implementing the fraction of always takers affected.
     # gamma is nuisance par to convert inequalities to equalities.
     # epsilon: nuisance par to create target par for the new constraints
-    
+
     par_lengths <- c(par_lengths, "iota" = K, "gamma" = K + 1, "epsilon" = K + 1)
     parameter_types <- c(parameter_types,
                          rep("iota", par_lengths[["iota"]]),
@@ -750,10 +767,10 @@ construct_Aobs_Ashp_betashp <- function(yvec,
     gamma_indices <- which(parameter_types == "gamma")
     epsilon_indices <- which(parameter_types == "epsilon")
   }
-  
+
   len_x <- sum(par_lengths)
-  
-  
+
+
   # Set theta_lk = 0 for l > k using
   # Matrix that encodes whether l > k
   l_gt_k_mat <- matrix(NA, K, K)
@@ -772,8 +789,8 @@ construct_Aobs_Ashp_betashp <- function(yvec,
   } else {
     A.shp <- matrix(0, nrow = K + 1, ncol = len_x)
   }
-  
-  
+
+
   # Set bound on sum_{l!=k} theta_lk - sum_q delta_qk
   # Also includes eta_kk (= theta_kk TV_kk) as a "nuisance" parameter
   for (k in 1:K) {
@@ -786,36 +803,36 @@ construct_Aobs_Ashp_betashp <- function(yvec,
     # TV_kk "nuisance" parameters
     A.shp[k, sum(par_lengths[1:4]) + k] <- 1
   }
-  
-  
+
+
   ## If testing the fraction of ATs, need to update previously defined inequalities and include new inequalities
   ## For more details, please refer to Jon's notes.
   if (!is.null(frac_ATs_affected)) {
-    
+
     ## Coefficients for iota, for equation 2
     A.shp[1:K, sum(par_lengths[1:5]) + 1:K] <- diag(K)
-    
+
     ## For equation 3 and 4
     temp <- matrix(0, nrow = K + 1, ncol = len_x)
-    
+
     # for equation 4
-    for (k in 1:K) { 
+    for (k in 1:K) {
       temp[k, (k-1) * K + k] <- 1    # theta_kk has coefficient 1
       temp[k, sum(par_lengths[1:5]) + k] <- -1  # iota_k has coefficient -1
       temp[k, sum(par_lengths[1:6]) + k] <- -1  # gamma is slack parameter for turning ineq into eq
       temp[k, sum(par_lengths[1:7]) + k] <- 1 # epsilon is the FSST target param
     }
-    
+
     # for equation 3
     temp[K+1, 1:par_lengths[1]] <- colSums(temp[1:K, 1:par_lengths[1]]) * frac_ATs_affected  # summing thetas
     temp[K+1, sum(par_lengths[1:5]) + 1:K] <- -1  # summing iotas
     temp[K+1, sum(par_lengths[1:7])] <- -1 # gamma converting inequalities into equalities
     temp[K+1, sum(par_lengths[1:7]) + K + 1] <- 1 # epsilon is the FSST target param
-    
+
     A.shp <- rbind(A.shp, temp)
   }
 
-  
+
   if (max_defiers_share == 0) {
     if (inequalities_only) {
       # Because these are for the inequalities to become equalities. eta is the FSST target param which is a nuisance param
@@ -832,7 +849,7 @@ construct_Aobs_Ashp_betashp <- function(yvec,
       #Remove the extraneous thetas only
       A.shp <- A.shp[, -l_gt_k_inds]
     }
-    
+
   } else {
 
     A.shp[K + 1, l_gt_k_inds] <- - 1
@@ -848,19 +865,19 @@ construct_Aobs_Ashp_betashp <- function(yvec,
       A.shp <- rbind(A.shp, diag(NCOL(A.shp)))
 
     } else {
-      
+
       # Inequalities to equalities for max_defiers_share
       if (!is.null(frac_ATs_affected)) {
-        A.shp <- cbind(A.shp, c( rep(0, K), -1, rep(0, K+1) )) # A slackness param which is greater than or equal to 0 to impose equality 
-      } else { 
-        A.shp <- cbind(A.shp, c(rep(0, K), -1)) # A slackness param which is greater than or equal to 0 to impose equality 
+        A.shp <- cbind(A.shp, c( rep(0, K), -1, rep(0, K+1) )) # A slackness param which is greater than or equal to 0 to impose equality
+      } else {
+        A.shp <- cbind(A.shp, c(rep(0, K), -1)) # A slackness param which is greater than or equal to 0 to impose equality
       }
-      
+
       # Update the list of parameters
       par_lengths <- c(par_lengths, "defier_zeta" = 1)
       parameter_types <- c(parameter_types, "defier_zeta")
       defier_zeta_indices <- which(parameter_types == "defier_zeta")
-      
+
       len_x <- sum(par_lengths)
     }
   }
@@ -871,7 +888,7 @@ construct_Aobs_Ashp_betashp <- function(yvec,
     beta.shp[K + 1]  <- - max_defiers_share
   }
 
-  
+
   # Set remaining constraints using A.obs x = beta.obs
 
   # Define A.obs
@@ -918,7 +935,7 @@ construct_Aobs_Ashp_betashp <- function(yvec,
       #Remove the extraneous thetas only
       A.obs <- A.obs[, -c(l_gt_k_inds)]
     }
-    
+
   } else {
     if (inequalities_only) {
       # Remove kappa,zeta,eta
@@ -933,24 +950,24 @@ construct_Aobs_Ashp_betashp <- function(yvec,
       A.obs <- rbind(A.obs[1:(2 * K),],
                      -A.obs[1:(2 * K),],
                      A.obs[(2 * K + 1):NROW(A.obs), ])
-    } 
+    }
   }
-  
+
   # Create A.tgt (only used for lpinfer functions)
   A.tgt <- numeric(len_x)
   A.tgt[sum(par_lengths[1:4]) + (1:K)] <- 1
-  
+
   # If testing the fraction of ATs, include the additional target pars
   if (!is.null(frac_ATs_affected)) {
     A.tgt[sum(par_lengths[1:7]) + 1:(K+1)] <- 1
   }
-  
+
   # Remove the defier theta column
   if (max_defiers_share == 0) {
     A.tgt <- A.tgt[-l_gt_k_inds]
   }
-  
-  
+
+
 
   return(list(A.obs = A.obs,
               A.shp = A.shp,
@@ -962,13 +979,96 @@ construct_Aobs_Ashp_betashp <- function(yvec,
 
 
 # Constructing beta_obs
-get_beta.obs_fn <- function(yvec, dvec, mvec, inequalities_only,
+find_treatment_position <- function(name_vec, d) {
+  if (d %in% name_vec) {
+    return(match(d, name_vec))
+  }
+
+  matches <- grepl(paste0("fit_", d), name_vec, fixed = FALSE)
+  if (any(matches)) {
+    return(which(matches)[1])
+  }
+
+  stop("The treatment variable does not appear to be on the RHS of the provided reg_formula")
+}
+
+run_feols_with_treatment <- function(df, lhs_name, reg_formula, d) {
+  fml <- stats::as.formula(paste(lhs_name, reg_formula))
+  reg <- fixest::feols(fml = fml, data = df)
+  list(
+    reg = reg,
+    treat_idx = find_treatment_position(rownames(reg$coeftable), d)
+  )
+}
+
+compute_regression_probs <- function(df, yvec, mvec, my_values, d, reg_formula, transform_fun) {
+  purrr::map_dbl(seq_len(nrow(my_values)), function(j) {
+    lhs_name <- "lhs_tmp"
+    df[[lhs_name]] <- transform_fun(as.numeric(yvec == my_values$y[j] & mvec == my_values$m[j]),
+                                    df[[d]])
+
+    lhs_var <- stats::var(df[[lhs_name]])
+    if (is.na(lhs_var) || lhs_var == 0) {
+      return(0)
+    }
+
+    reg_out <- run_feols_with_treatment(df, lhs_name, reg_formula, d)
+    reg_out$reg$coeftable[reg_out$treat_idx, "Estimate"]
+  })
+}
+
+compute_regression_ifs <- function(df, yvec, mvec, my_values, d, reg_formula, transform_fun) {
+  n <- nrow(df)
+  out <- matrix(0, nrow = n, ncol = nrow(my_values))
+
+  for (idx in seq_len(nrow(my_values))) {
+    lhs_name <- "lhs_tmp"
+    df[[lhs_name]] <- transform_fun(as.numeric(yvec == my_values$y[idx] & mvec == my_values$m[idx]),
+                                    df[[d]])
+
+    lhs_var <- stats::var(df[[lhs_name]])
+    if (is.na(lhs_var) || lhs_var == 0) {
+      next
+    }
+
+    reg_out <- run_feols_with_treatment(df, lhs_name, reg_formula, d)
+
+    S <- sandwich::estfun(reg_out$reg)
+    B <- sandwich::bread(reg_out$reg)
+    IF <- (S %*% t(B))
+
+    treat_pos <- find_treatment_position(colnames(IF), d)
+    out[, idx] <- IF[, treat_pos]
+  }
+
+  out
+}
+
+control_transform <- function(lhs, d_vals) {
+  (d_vals - 1) * lhs
+}
+
+treated_transform <- function(lhs, d_vals) {
+  d_vals * lhs
+}
+
+get_beta.obs_fn <- function(yvec, dvec, mvec, df, d, reg_formula = NULL, inequalities_only,
                             yvalues, mvalues, my_values, rearrange = FALSE) {
   #Get frequencies for all possible values of (y,m) | D=0
-  p_ym_0_vec <- purrr::map_dbl(.x = 1:NROW(my_values),
-                               .f = ~mean(yvec[dvec == 0] == my_values$y[.x]
-                                          & mvec[dvec == 0] == my_values$m[.x]) )
+  if(!is.null(reg_formula)){
+    #Use regression approach
+    #Parse reg_formula to check for IV or covariates
 
+    #XX should do some basic sanity checks on the regression spec here
+
+    p_ym_0_vec <- compute_regression_probs(df, yvec, mvec, my_values, d, reg_formula, control_transform)
+  } else {
+      # Use original frequency approach (randomized D)
+      p_ym_0_vec <- purrr::map_dbl(.x = 1:NROW(my_values),
+                                   .f = ~mean(yvec[dvec == 0] == my_values$y[.x]
+                                              & mvec[dvec == 0] == my_values$m[.x]) )
+
+    }
   #Rearrange into a matrix where rows correspond to values of y and cols vals of m
   p_ym_d0 <-
     cbind(my_values, p_ym_0_vec) %>%
@@ -978,10 +1078,16 @@ get_beta.obs_fn <- function(yvec, dvec, mvec, inequalities_only,
 
 
   #Get frequencies for all possible values of (y,m) | D=1
-  p_ym_1_vec <- purrr::map_dbl(.x = 1:NROW(my_values),
-                               .f = ~mean(yvec[dvec == 1] == my_values$y[.x]
-                                          & mvec[dvec == 1] == my_values$m[.x]) )
-
+   if(!is.null(reg_formula)){
+    #Use regression approach
+    #Parse reg_formula to check for IV or covariates
+    p_ym_1_vec <- compute_regression_probs(df, yvec, mvec, my_values, d, reg_formula, treated_transform)
+      } else{
+    # Use original frequency approach (randomized D)
+    p_ym_1_vec <- purrr::map_dbl(.x = 1:NROW(my_values),
+                                 .f = ~mean(yvec[dvec == 1] == my_values$y[.x]
+                                            & mvec[dvec == 1] == my_values$m[.x]) )
+ }
   #Rearrange into a matrix where rows correspond to values of y and cols vals of m
   p_ym_d1 <-
     cbind(my_values, p_ym_1_vec) %>%
@@ -1026,8 +1132,9 @@ get_beta.obs_fn <- function(yvec, dvec, mvec, inequalities_only,
 }
 
 #Function to get the IFs for beta_obs and its subcomponents
-get_IFs <- function(yvec, dvec, mvec, my_values, mvalues = unique(my_values$m),
+get_IFs <- function(yvec, dvec, mvec, df, d, reg_formula = NULL, my_values, mvalues = unique(my_values$m),
                     inequalities_only = T, exploit_binary_m = FALSE){
+
   n <- length(yvec)
   n0 <- sum(dvec == 0)
   n1 <- sum(dvec == 1)
@@ -1038,27 +1145,7 @@ get_IFs <- function(yvec, dvec, mvec, my_values, mvalues = unique(my_values$m),
   p_ym_1_noncentered_IFs <- matrix(NA, nrow = n, ncol = NROW(my_values) )
   p_ym_1_centered_IFs <- matrix(NA, nrow = n, ncol = NROW(my_values) )
 
-
-
-  for(i in 1:NROW(my_values)){
-    p_ym_0_indicators <- (yvec == my_values$y[i]) &
-      (mvec == my_values$m[i]) &
-      (dvec == 0)
-
-    p_ym_0_noncentered_IFs[,i] <- p_ym_0_indicators / (n0/n)
-    p_ym_0_centered_IFs[,i] <- (dvec==0) * (p_ym_0_indicators - mean(p_ym_0_noncentered_IFs[,i])) / (n0/n)
-
-    p_ym_1_indicators <- (yvec == my_values$y[i]) &
-      (mvec == my_values$m[i]) &
-      (dvec == 1)
-
-    p_ym_1_noncentered_IFs[,i] <- p_ym_1_indicators / (n1/n)
-    p_ym_1_centered_IFs[,i] <- (dvec==1) * (p_ym_1_indicators - mean(p_ym_1_noncentered_IFs[,i])) / (n1/n)
-
-  }
-
-
-  k <- length(mvalues )
+  k <- length(mvalues)
 
   p_m_0_noncentered_IFs <- matrix(NA, nrow = n, ncol = k )
   p_m_0_centered_IFs <- matrix(NA, nrow = n, ncol = k )
@@ -1066,33 +1153,62 @@ get_IFs <- function(yvec, dvec, mvec, my_values, mvalues = unique(my_values$m),
   p_m_1_noncentered_IFs <- matrix(NA, nrow = n, ncol = k )
   p_m_1_centered_IFs <- matrix(NA, nrow = n, ncol = k )
 
+# Randomised design (reg_formula is NULL)
 
-  for(i in 1:k){
-    p_m_0_indicators <-
-      (mvec == mvalues[i]) &
-      (dvec == 0)
+  if (is.null(reg_formula)){
 
-    p_m_0_noncentered_IFs[,i] <- p_m_0_indicators / (n0/n)
-    p_m_0_centered_IFs[,i] <- (dvec==0) * (p_m_0_indicators - mean(p_m_0_noncentered_IFs[,i])) / (n0/n)
+    for(i in 1:NROW(my_values)){
+      p_ym_0_indicators <- (yvec == my_values$y[i]) &
+        (mvec == my_values$m[i]) &
+        (dvec == 0)
 
-    p_m_1_indicators <-
-      (mvec == mvalues[i]) &
-      (dvec == 1)
+      p_ym_0_noncentered_IFs[,i] <- p_ym_0_indicators / (n0/n)
+      p_ym_0_centered_IFs[,i] <- (dvec==0) * (p_ym_0_indicators - mean(p_ym_0_noncentered_IFs[,i])) / (n0/n)
 
-    p_m_1_noncentered_IFs[,i] <- p_m_1_indicators / (n1/n)
-    p_m_1_centered_IFs[,i] <- (dvec==1) * (p_m_1_indicators - mean(p_m_1_noncentered_IFs[,i])) / (n1/n)
+      p_ym_1_indicators <- (yvec == my_values$y[i]) &
+        (mvec == my_values$m[i]) &
+        (dvec == 1)
 
+      p_ym_1_noncentered_IFs[,i] <- p_ym_1_indicators / (n1/n)
+      p_ym_1_centered_IFs[,i] <- (dvec==1) * (p_ym_1_indicators - mean(p_ym_1_noncentered_IFs[,i])) / (n1/n)
+    }
+
+    for(i in 1:k){
+      p_m_0_indicators <-
+        (mvec == mvalues[i]) &
+        (dvec == 0)
+
+      p_m_0_noncentered_IFs[,i] <- p_m_0_indicators / (n0/n)
+      p_m_0_centered_IFs[,i] <- (dvec==0) * (p_m_0_indicators - mean(p_m_0_noncentered_IFs[,i])) / (n0/n)
+
+      p_m_1_indicators <-
+        (mvec == mvalues[i]) &
+        (dvec == 1)
+
+      p_m_1_noncentered_IFs[,i] <- p_m_1_indicators / (n1/n)
+      p_m_1_centered_IFs[,i] <- (dvec==1) * (p_m_1_indicators - mean(p_m_1_noncentered_IFs[,i])) / (n1/n)
+    }
+
+
+  } else{
+    # Non_experimental design
+    p_ym_0_centered_IFs <- compute_regression_ifs(df, yvec, mvec, my_values, d, reg_formula, control_transform)
+    p_ym_1_centered_IFs <- compute_regression_ifs(df, yvec, mvec, my_values, d, reg_formula, treated_transform)
+
+    for (i in 1:k){
+      idx <- which(my_values$m == mvalues[i])
+      if(length(idx)){
+        p_m_0_centered_IFs[,i] <- rowSums(p_ym_0_centered_IFs[,idx,drop=FALSE])
+        p_m_1_centered_IFs[,i] <- rowSums(p_ym_1_centered_IFs[,idx,drop=FALSE])
+        p_m_0_noncentered_IFs[,i] <- rowSums(p_ym_0_noncentered_IFs[,idx,drop=FALSE])
+        p_m_1_noncentered_IFs[,i] <- rowSums(p_ym_1_noncentered_IFs[,idx,drop=FALSE])
+      }
+    }
   }
 
+
   if (inequalities_only) {
-    #Duplicate the first two sets of rows with opposite signs
-    # to cast equalities as inequalities
-    beta.obs_noncentered_IFs <- cbind(
-      p_m_0_noncentered_IFs,
-      p_m_1_noncentered_IFs,
-      -p_m_0_noncentered_IFs,
-      -p_m_1_noncentered_IFs,
-      p_ym_1_noncentered_IFs - p_ym_0_noncentered_IFs)
+
 
     beta.obs_centered_IFs <- cbind(
       p_m_0_centered_IFs,
@@ -1101,11 +1217,6 @@ get_IFs <- function(yvec, dvec, mvec, my_values, mvalues = unique(my_values$m),
       -p_m_1_centered_IFs,
       p_ym_1_centered_IFs - p_ym_0_centered_IFs)
   } else {
-    beta.obs_noncentered_IFs <- cbind(
-      p_m_0_noncentered_IFs,
-      p_m_1_noncentered_IFs,
-      p_ym_1_noncentered_IFs - p_ym_0_noncentered_IFs)
-
 
     beta.obs_centered_IFs <- cbind(
       p_m_0_centered_IFs,
@@ -1119,38 +1230,39 @@ get_IFs <- function(yvec, dvec, mvec, my_values, mvalues = unique(my_values$m),
                   cbind((p_ym_0_centered_IFs - p_ym_1_centered_IFs)[,1:num_yvals], (p_ym_1_centered_IFs - p_ym_0_centered_IFs)[,(num_yvals+1):(2*num_yvals)])))
   }
 
-
-  return(list(beta.obs_noncentered_IFs = beta.obs_noncentered_IFs,
+  return(list(
               beta.obs_centered_IFs = beta.obs_centered_IFs,
-              p_ym_0_noncentered_IFs = p_ym_0_noncentered_IFs,
               p_ym_0_centered_IFs = p_ym_0_centered_IFs,
-              p_ym_1_noncentered_IFs = p_ym_1_noncentered_IFs,
               p_ym_1_centered_IFs = p_ym_1_centered_IFs,
-              p_m_0_noncentered_IFs = p_m_0_noncentered_IFs,
               p_m_0_centered_IFs = p_m_0_centered_IFs,
-              p_m_1_noncentered_IFs = p_m_1_noncentered_IFs,
               p_m_1_centered_IFs = p_m_1_centered_IFs
   ))
 
 }
 
 analytic_variance <-
-  function(yvec, dvec, mvec, clustervec = seq(from = 1, to = length(yvec)), my_values, mvalues = unique(my_values$m),
-           inequalities_only, exploit_binary_m = FALSE){
+  function(yvec, dvec, mvec, df, d, reg_formula = NULL,
+           clustervec = seq(from = 1, to = length(yvec)),
+           my_values, mvalues = unique(my_values$m),
+           inequalities_only = TRUE, exploit_binary_m = FALSE){
 
-    IFs <- get_IFs(yvec = yvec,
+    IF_out <- get_IFs(yvec = yvec,
                    dvec = dvec,
                    mvec = mvec,
+                   df = df,
+                   d = d,
+                   reg_formula = reg_formula,
                    my_values = my_values,
                    mvalues = mvalues,
                    inequalities_only = inequalities_only,
-                   exploit_binary_m = exploit_binary_m)$beta.obs_centered_IFs
+                   exploit_binary_m = exploit_binary_m)
+    IFs <- IF_out$beta.obs_centered_IFs
+
 
     #Sum the IFs within cluster
     IFs_clustered <- base::rowsum(x = IFs,
                                   group = clustervec)
 
-    #Variance is Cov(IFs * N_cluster/N  ) / N_Cluster
     n <- length(yvec)
     c <- length(unique(clustervec))
 

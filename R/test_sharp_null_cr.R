@@ -17,7 +17,6 @@
 #'   objective/constraints
 #' @param alpha Significance level. Default value is .05
 #' @param num_Ybins (Optional) If specified, Y is discretized into the given number of bins (if num_Ybins is larger than the number of unique values of Y, no changes are made)
-#' @export
 test_sharp_null_cr <- function(df, d, m, y, ordering = NULL, B = 500,
                                eps_bar = 1e-03, alpha = .05, num_Ybins = NULL){
 

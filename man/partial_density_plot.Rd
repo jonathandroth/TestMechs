@@ -14,7 +14,8 @@ partial_density_plot(
   density_1_label = "f(Y,M=1|D=1)",
   density_0_label = "f(Y,M=1|D=0)",
   num_Ybins = NULL,
-  continuous_Y = base::ifelse(is.null(num_Ybins), TRUE, FALSE)
+  reg_formula = NULL,
+  continuous_Y = FALSE
 )
 }
 \arguments{
@@ -36,7 +37,9 @@ partial_density_plot(
 
 \item{num_Ybins}{(Optional) If specified, Y is discretized into the given number of bins (if num_Ybins is larger than the number of unique values of Y, no changes are made)}
 
-\item{continuous_Y}{(Optional) Should Y be treated as continuous for density estimation. Default is TRUE. Use FALSE for discrete Y}
+\item{reg_formula}{(Optional) Regression formula for observational adjustment}
+
+\item{continuous_Y}{(Optional) Should Y be treated as continuous for density estimation. Default is FALSE.}
 }
 \value{
 A ggplot object showing partial densities

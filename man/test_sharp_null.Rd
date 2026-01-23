@@ -13,6 +13,7 @@ test_sharp_null(
   ordering = NULL,
   B = 500,
   cluster = NULL,
+  reg_formula = NULL,
   weight.matrix = "diag",
   hybrid_kappa = alpha/10,
   num_Ybins = NULL,
@@ -48,6 +49,8 @@ support}
 
 \item{cluster}{Cluster for bootstrap}
 
+\item{reg_formula}{Regression formula for the non-experimental setting.}
+
 \item{weight.matrix}{Weight matrix used to implement FSST. Possible options are "diag", "avar", "identity." Defaults is "diag" as in FSST.}
 
 \item{hybrid_kappa}{The first-stage size value of the ARP hybrid test. If NULL, the ARP conditional (non-hybrid) test is used. Default is alpha/10}
@@ -81,5 +84,5 @@ support}
 \description{
 This function tests the sharp null that Y(1,m) = Y(0,m). The
   outcome and mediator are both assumed to take finitely many different
-  values. Several options are available for infernece.
+  values. Several options are available for inference.
 }
