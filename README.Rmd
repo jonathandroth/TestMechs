@@ -343,7 +343,7 @@ test_result_gm_iv <- test_sharp_null(df = mother_data,
                                        d = "treat",
                                        m = "grandmother",
                                        y = "motherfinancial",
-                                       reg_formula = "~ age_baseline + edu_mo_baseline + wealth_baseline + (treat = iv)", #iv spec
+                                       reg_formula = "~ age_baseline + edu_mo_baseline + wealth_baseline | treat ~ iv", #iv spec
                                        method = "CS",
                                        num_Ybins = 5,
                                        cluster = "uc")
