@@ -158,12 +158,6 @@ test_sharp_null_binary_m <- function(df,
                                      clustervec = clustervec,
                                      exploit_binary_m = TRUE)
 
-      if (method == "CS" & print_both_var) {
-        sigma.obs_boot <- stats::cov(base::Reduce(base::rbind,
-                                                  beta.obs_list))
-        print(sigma.obs)
-        print(sigma.obs_boot)
-      }
     }
     else {
       sigma.obs <- stats::cov(base::Reduce(base::rbind,

@@ -9,15 +9,24 @@ License: GPL (>= 3)
 Encoding: UTF-8
 LazyData: true
 Imports: 
-    base,
     dplyr,
+    fixest,
     ggplot2,
+    haven,
+    HonestDiD,
     magrittr,
+    osqp,
     purrr,
-    reldist,
-    data.table (>= 1.15.4)
+    quadprog,
+    reshape2,
+    Rglpk,
+    sandwich
+Remotes:
+    asheshrambachan/HonestDiD
 RoxygenNote: 7.3.2
 Suggests: 
+    gurobi,
+    lpinfer,
     testthat (>= 3.0.0)
 Config/testthat/edition: 3
 Depends: 

@@ -61,6 +61,6 @@ ordering is used.}
 \description{
 This function tests the sharp null of Y(1,m) = Y(0,m). The
   outcome and mediator are both assumed to take finitely many different
-  values. The mediator is assuemd to be binary. 
+  values. The mediator is assuemd to be binary.
   The inference is via Cox and Shi (2023) OR Andrews, Roth, and Pakes OR FSST.
 }
