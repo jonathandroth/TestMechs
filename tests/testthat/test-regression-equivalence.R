@@ -140,7 +140,19 @@ test_that("test_sharp_null regression adjustments match baseline (nonbinary M)",
     reg_formula = "~ treat"
   )
 
-  expect_equivalent_results(base_res, trivial_res)
+  augmented_res <- test_sharp_null(
+    df = datasets$mother_data_plus_fake,
+    d = "treat",
+    m = "relationship_husb",
+    y = "motherfinancial",
+    method = "CS",
+    num_Ybins = 5,
+    cluster = "uc",
+    reg_formula = "~ treat | fake",
+    analytic_variance = TRUE
+  )
+
+  expect_equivalent_results(base_res, trivial_res, augmented_res)
 })
 
 test_that("fixest control and IV specifications align for nonbinary M", {
