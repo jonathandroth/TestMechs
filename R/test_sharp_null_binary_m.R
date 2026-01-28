@@ -151,6 +151,37 @@ test_sharp_null_binary_m <- function(df,
   beta.obs <- get_beta.obs(yvec, dvec, mvec)
 
 
+  ## Function for bootstrapping the betas (computed lazily when needed)
+  beta.obs_list <- NULL
+  get_bootstrap_draws <- function() {
+    if (is.null(beta.obs_list)) {
+      beta.obs_list <<- compute_bootstrap_draws_clustered(
+        f = function(df, d, y, m, ...) {
+          get_beta.obs(
+            df[[y]],
+            df[[d]],
+            df[[m]],
+            df,
+            d,
+            yvalues,
+            reg_formula = reg_formula
+          )
+        },
+        df = df,
+        d = d,
+        m = m,
+        y = y,
+        cluster = cluster,
+        numdraws = B,
+        fix_n1 = fix_n1,
+        return_df = F
+      )
+    }
+    beta.obs_list
+  }
+
+
+
   if(!analytic_variance){
   ## Bootstrap the betas
   beta.obs_list <- compute_bootstrap_draws_clustered(f =
