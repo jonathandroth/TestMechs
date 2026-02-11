@@ -17,6 +17,7 @@ Imports:
     magrittr,
     osqp,
     purrr,
+    tidyr,
     quadprog,
     reshape2,
     Rglpk,
