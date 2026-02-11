@@ -78,7 +78,7 @@ test_sharp_null_binary_m <- function(df,
   
   yvalues <- sort(unique(yvec))
   mvalues <- unique(mvec)
-  my_values <- purrr::cross_df(list(m=mvalues,y=yvalues)) %>%
+  my_values <- tidyr::expand_grid(m=mvalues,y=yvalues) %>%
     dplyr::arrange(m,y) %>%
     dplyr::select(y,m)
   

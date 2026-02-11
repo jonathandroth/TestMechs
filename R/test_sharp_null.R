@@ -204,7 +204,7 @@ devtools::install_github('conroylau/lpinfer')")
   #Note we need to do this here so that the yvalues remain constant across boostrap draws
   yvalues <- unique(yvec)
   mvalues <- unique(mvec)
-  my_values <- purrr::cross_df(list(m=mvalues,y=yvalues)) %>%
+  my_values <- tidyr::expand_grid(m=mvalues,y=yvalues) %>%
     dplyr::arrange(m,y) %>%
     dplyr::select(y,m)
 

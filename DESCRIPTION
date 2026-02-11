@@ -17,12 +17,14 @@ Imports:
     magrittr,
     osqp,
     purrr,
+    tidyr,
     quadprog,
     reshape2,
     Rglpk,
     sandwich
 Remotes:
-    asheshrambachan/HonestDiD
+    asheshrambachan/HonestDiD,
+    conroylau/lpinfer
 RoxygenNote: 7.3.2
 Suggests: 
     gurobi,
