@@ -156,7 +156,7 @@ df[[y]] <- yvec
 
   yvalues <- unique(yvec)
   mvalues <- unique(mvec)
-  my_values <- purrr::cross_df(list(m=mvalues,y=yvalues)) %>%
+  my_values <- tidyr::expand_grid(m=mvalues,y=yvalues) %>%
                 dplyr::arrange(m,y) %>%
                 dplyr::select(y,m)
 
